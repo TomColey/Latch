@@ -1,86 +1,161 @@
-# Lock
+# Latch
 
-**Block distracting apps with a physical NFC tag.**
+**Make your phone useful again.**
 
-Lock turns any NFC tag into a physical switch for your focus: tap it to block your distracting apps, tap it again to unblock them. No willpower negotiation with a "disable blocking" button. Unlocking requires the physical tag, so leaving your tag in another room means leaving your distractions there too.
+Latch is a simple Android app that uses physical NFC tags to change how much access you have to your phone.
 
-<p>
-  <a href="https://play.google.com/store/apps/details?id=com.nathanb.lock">
-    <img alt="Get it on Google Play" src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" height="60">
-  </a>
-</p>
+When your phone is **unlatched**, everything works normally. When it is **latched**, everything is blocked by default except the apps you have deliberately chosen to let through.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-![Platform](https://img.shields.io/badge/platform-Android%2013%2B-brightgreen)
-![Kotlin](https://img.shields.io/badge/Kotlin-100%25-purple)
+Instead of asking you to maintain a growing list of distractions, Latch flips the logic: **you decide what deserves access to your attention.**
 
-## Download
+## Why Latch?
 
-Lock is available in two ways:
+Most app blockers still leave the decision on the phone. You can disable them, extend a timer, change a setting or simply decide that this time is an exception.
 
-- **Google Play** (recommended): automatic updates, signed by Google Play App Signing.
-- **GitHub Releases**: the APK attached to each [release](https://github.com/NathanLenias/lock-app/releases), signed with my own key. No automatic updates: check the releases page (or use a tool like [Obtainium](https://github.com/ImranR98/Obtainium)) to get new versions.
+Latch moves that decision into the physical world.
 
-**Pick one source and stick with it.** The two builds are signed with different keys, so Android will refuse to install one over the other. Switching sources means uninstalling first, which deletes your sessions, paired tags and settings (export a backup from Settings before you do).
+Tap a physical NFC tag to latch your phone. If you want full access again, you have to physically use an authorised Latch to unlatch it.
 
-## Features
+That small amount of friction is the point.
 
-- **NFC toggle**: pair one or more NFC tags; scanning a paired tag locks or unlocks your phone's distracting apps, even when the app isn't running
-- **Profiles**: different app lists for different contexts (Work, Sleep, Focus...), including temporary and no-escape session types
-- **Manual mode**: no tag? Lock and unlock from the app, with timed sessions
-- **Session stats**: history, streaks, weekly charts and total focused time
-- **Safety valves**: emergency unlocks (limited), a 5-hour session timeout, and uninstalling always restores access
-- **Private by design**: no account, no network calls, everything stays on your device; JSON backup/export included
-- **Localized**: French, English, German. Light and dark themes.
+Latch is not designed to make your phone unusable. It is designed to make it useful on your terms.
+
+Calls, messages, maps, music, banking, authentication, WhatsApp or anything else you genuinely need can still get through. Endless feeds, shopping apps, browsers, games or whatever tends to swallow your attention stay outside unless you explicitly allow them in.
+
+## Modes
+
+Latch is built around custom **Modes**.
+
+A Mode defines what your phone should be allowed to do in a particular context. You might create:
+
+- **Bedtime** — Phone, Messages, WhatsApp, Clock and Spotify
+- **Focus** — Phone, Messages, Teams, Outlook and Authenticator
+- **Family Time** — Phone, Messages, WhatsApp and Camera
+- **Out & About** — Phone, Messages, Maps, Wallet, Camera and Music
+
+These are only examples. Modes are completely user-defined.
+
+Every Mode follows the same simple rule:
+
+> If you did not choose to let an app through, it stays blocked while that Mode is active.
+
+## Physical Latches
+
+NFC tags become physical **Latches** that can activate or release Modes.
+
+A single Latch can act as a simple toggle, or you can deliberately separate the place where a Mode starts from the place where it can end.
+
+For example:
+
+```text
+Bedtime
+
+Allowed through:
+Phone
+Messages
+WhatsApp
+Clock
+Spotify
+
+Latch with: Bedroom
+Unlatch with: Kitchen
+Maximum latch time: 8 hours
+```
+
+Tapping the Bedroom Latch activates Bedtime. Tapping it again does not release it. To fully unlatch the phone, you need to physically go to the Kitchen Latch.
+
+For something like Focus, the same Desk Latch could both activate and release the Mode.
+
+This means Latch can create as much or as little physical friction as the situation needs.
+
+## Safety without an escape button
+
+Latch deliberately avoids a convenient emergency-unlock button.
+
+Every Mode has a maximum latch time. If the required NFC tag is lost, damaged or unavailable, the phone automatically returns to its normal unlatched state when that maximum time is reached.
+
+The maximum is a safety limit, not a productivity timer. Latch is meant to stay active until you physically unlatch it, while making sure you can never permanently lock yourself out.
+
+## What Latch is not
+
+Latch is intentionally small and focused.
+
+There are no schedules, streaks, productivity scores, focus charts or easy bypass buttons planned for the core experience.
+
+The normal interaction should remain:
+
+```text
+Tap a Latch
+→ phone becomes Latched
+
+Tap an authorised Latch
+→ phone becomes Unlatched
+```
+
+No menus. No repeated decisions. No negotiation with yourself five minutes later.
+
+## Project status
+
+Latch is currently in early development.
+
+The project began as a fork of [Lock](https://github.com/NathanLenias/lock-app), an excellent open-source NFC app blocker by Nathan Lenias. Lock provides the working Android foundation for NFC handling, accessibility-based app restriction, local persistence and session management.
+
+Latch is being redesigned around a different access model and product philosophy:
+
+- everything is blocked by default while Latched
+- Modes define what is allowed through
+- NFC devices can have separate latch and unlatch roles
+- each Mode has a maximum automatic release time
+- the physical interaction is the centre of the experience
+
+The current codebase still contains inherited Lock features and terminology while this refactor is underway.
+
+## Privacy
+
+Latch is intended to remain local-first and private by design.
+
+No account should be required, and the core functionality does not need internet access. Mode configuration, NFC tags and session state remain on the device.
 
 ## How it works
 
-1. An [Accessibility Service](https://developer.android.com/guide/topics/ui/accessibility/service) watches for app launches while a session is active
-2. When a blocked app opens, Lock bounces you back to the home screen and shows a gentle overlay
-3. Lock/unlock state is toggled by scanning a paired NFC tag (Reader Mode in the foreground, NDEF intent routing from the background; pairing writes an [AAR](https://developer.android.com/develop/connectivity/nfc/nfc#aar) to the tag so Android launches Lock automatically)
+Latch uses Android's Accessibility Service to detect when an app opens while the phone is Latched.
 
-No device-admin tricks, no VPN, no root. The blocklist, sessions and settings live in a local Room database and DataStore.
+If the app is not permitted by the active Mode, Latch returns the user to the home screen and provides simple visual feedback.
+
+NFC tags provide the physical latch/unlatch interaction. During pairing, Latch writes routing information to compatible NFC tags so Android can hand scans directly to the app even when it is not already open.
+
+No root access, VPN or device-admin tricks are required.
 
 ## Tech stack
 
-- 100% Kotlin, single-activity Jetpack Compose (Material 3, custom design system)
-- Room + DataStore, Kotlin Coroutines/Flow
-- No third-party runtime dependencies beyond AndroidX
+- Kotlin
+- Jetpack Compose
+- Room
+- DataStore
+- Kotlin Coroutines and Flow
+- Android NFC APIs
+- Android Accessibility Service
 
 ## Building from source
 
-```bash
-git clone https://github.com/NathanLenias/lock-app.git
-cd lock-app
-```
-
-**Fonts (required):** Lock uses the [Satoshi](https://www.fontshare.com/fonts/satoshi) typeface, which is free but not redistributable, so the font files are not in this repo. Download Satoshi from Fontshare and drop these five files into `app/src/main/res/font/`:
-
-```
-satoshi_light.otf
-satoshi_regular.otf
-satoshi_medium.otf
-satoshi_bold.otf
-satoshi_black.otf
-```
-
-Then build and install:
+Latch currently retains the original Lock project structure while the refactor is underway.
 
 ```bash
+git clone https://github.com/TomColey/Latch.git
+cd Latch
 ./gradlew assembleDebug
-adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-NFC features need a physical device with NFC hardware (min SDK 33 / Android 13).
+NFC features require a physical Android device with NFC hardware.
 
-## Support
+The inherited project currently uses the Satoshi typeface. These font files are not redistributed in the repository and must be added locally to `app/src/main/res/font/` when building the current codebase.
 
-Lock is free, without ads or tracking. If it helps you focus, you can [support me on Ko-fi](https://ko-fi.com/nathanpmdev) ☕
+## Credits
 
-## Related projects
+Latch is built from the open-source [Lock](https://github.com/NathanLenias/lock-app) project by Nathan Lenias and is used under the terms of the MIT License.
 
-- [Foqos](https://github.com/awaseem/foqos): a great NFC-based app blocker for iOS
+The original project solved much of the difficult Android work that makes this idea possible. Latch is taking that foundation in a different direction, centred on selective access rather than maintaining a blocklist.
 
 ## License
 
-[MIT](LICENSE)
+This project is licensed under the [MIT License](LICENSE).
