@@ -20,7 +20,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.nathanb.lock"
+        applicationId = "com.tomcoley.latch"
         minSdk = 33
         targetSdk = 36
         versionCode = 15
