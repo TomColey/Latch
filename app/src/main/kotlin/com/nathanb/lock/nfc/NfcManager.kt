@@ -49,8 +49,8 @@ class NfcManager(
 ) {
     companion object {
         private const val TAG = "NfcManager"
-        private const val MIME_TYPE = "application/vnd.lock.toggle"
-        private const val APP_PACKAGE = "com.nathanb.lock"
+        private const val MIME_TYPE = "application/vnd.latch.toggle"
+        private const val APP_PACKAGE = "com.tomcoley.latch"
         private const val PAIRING_GRACE_MS = 3_000L
 
         /**
@@ -282,11 +282,11 @@ class NfcManager(
      * instead of TAG_DISCOVERED (lowest priority, causes dual-task bug).
      *
      * The message contains:
-     * 1. A custom MIME record (application/vnd.lock.toggle) — used by Android for intent routing
-     * 2. An Android Application Record (AAR) — forces Android to launch Lock specifically
+     * 1. A custom MIME record (application/vnd.latch.toggle) — used by Android for intent routing
+     * 2. An Android Application Record (AAR) — forces Android to launch Latch specifically
      */
     private fun writeNdefToTag(tag: Tag): NdefWriteResult {
-        val mimeRecord = NdefRecord.createMime(MIME_TYPE, "lock".toByteArray())
+        val mimeRecord = NdefRecord.createMime(MIME_TYPE, "latch".toByteArray())
         val aarRecord = NdefRecord.createApplicationRecord(APP_PACKAGE)
         val ndefMessage = NdefMessage(arrayOf(mimeRecord, aarRecord))
 
