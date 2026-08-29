@@ -5,6 +5,10 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.nathanb.lock.data.model.AutoLatchSchedule
+import com.nathanb.lock.data.model.LatchDevice
+import com.nathanb.lock.data.model.Mode
+import com.nathanb.lock.data.model.ModeLatchLink
 import com.nathanb.lock.data.model.NfcTag
 import com.nathanb.lock.data.model.Profile
 import com.nathanb.lock.data.model.Schedule
@@ -76,9 +80,78 @@ val MIGRATION_4_5 = object : Migration(4, 5) {
     }
 }
 
+/**
+ * Introduces Latch's domain model alongside the inherited Lock tables.
+ *
+ * No existing Profile/NFC/Schedule data is copied into these tables. Lock's blocklist model has
+ * different semantics from Latch's allow-list model, so silently transforming that data would be
+ * unsafe. Behaviour continues to use the old tables until the next phase switches it over.
+ */
+val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `modes` (" +
+                "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                "`name` TEXT NOT NULL, " +
+                "`allowedPackages` TEXT NOT NULL, " +
+                "`maxLatchDurationMs` INTEGER NOT NULL, " +
+                "`createdAt` INTEGER NOT NULL)"
+        )
+
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `latch_devices` (" +
+                "`uid` TEXT NOT NULL, " +
+                "`name` TEXT NOT NULL, " +
+                "`createdAt` INTEGER NOT NULL, " +
+                "PRIMARY KEY(`uid`))"
+        )
+
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `mode_latches` (" +
+                "`modeId` INTEGER NOT NULL, " +
+                "`latchUid` TEXT NOT NULL, " +
+                "`action` TEXT NOT NULL, " +
+                "PRIMARY KEY(`modeId`, `latchUid`, `action`), " +
+                "FOREIGN KEY(`modeId`) REFERENCES `modes`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE, " +
+                "FOREIGN KEY(`latchUid`) REFERENCES `latch_devices`(`uid`) ON UPDATE NO ACTION ON DELETE CASCADE)"
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_mode_latches_modeId` ON `mode_latches` (`modeId`)"
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_mode_latches_latchUid` ON `mode_latches` (`latchUid`)"
+        )
+
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `auto_latch_schedules` (" +
+                "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                "`modeId` INTEGER NOT NULL, " +
+                "`daysOfWeek` INTEGER NOT NULL, " +
+                "`startMinuteOfDay` INTEGER NOT NULL, " +
+                "`enabled` INTEGER NOT NULL DEFAULT 1, " +
+                "`createdAt` INTEGER NOT NULL, " +
+                "FOREIGN KEY(`modeId`) REFERENCES `modes`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE)"
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_auto_latch_schedules_modeId` " +
+                "ON `auto_latch_schedules` (`modeId`)"
+        )
+    }
+}
+
 @Database(
-    entities = [Profile::class, Session::class, NfcTag::class, Schedule::class, ScheduleProfileLink::class],
-    version = 5,
+    entities = [
+        Profile::class,
+        Session::class,
+        NfcTag::class,
+        Schedule::class,
+        ScheduleProfileLink::class,
+        Mode::class,
+        LatchDevice::class,
+        ModeLatchLink::class,
+        AutoLatchSchedule::class,
+    ],
+    version = 6,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -88,4 +161,9 @@ abstract class LockDatabase : RoomDatabase() {
     abstract fun nfcTagDao(): NfcTagDao
     abstract fun scheduleDao(): ScheduleDao
     abstract fun scheduleProfileDao(): ScheduleProfileDao
+
+    abstract fun modeDao(): ModeDao
+    abstract fun latchDeviceDao(): LatchDeviceDao
+    abstract fun modeLatchDao(): ModeLatchDao
+    abstract fun autoLatchScheduleDao(): AutoLatchScheduleDao
 }
