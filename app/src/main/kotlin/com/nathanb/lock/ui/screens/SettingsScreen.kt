@@ -71,6 +71,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.ui.res.stringResource
 import com.nathanb.lock.BuildConfig
+import com.nathanb.lock.LockApplication
 import com.nathanb.lock.R
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -106,14 +107,15 @@ fun SettingsScreen(
     onNavigateToSchedules: () -> Unit = {},
 ) {
     val colors = LockTheme.colors
+    val context = LocalContext.current
+    val app = context.applicationContext as LockApplication
     val profiles by viewModel.profiles.collectAsStateWithLifecycle()
     val sortedProfiles by viewModel.profilesSorted.collectAsStateWithLifecycle()
-    val nfcTags by viewModel.nfcTags.collectAsStateWithLifecycle()
+    val latchDevices by app.latchRepository.latchDevices.collectAsStateWithLifecycle(initialValue = emptyList())
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     val notificationsEnabled by viewModel.notificationsEnabled.collectAsStateWithLifecycle()
     val appIconBitmaps by viewModel.blockedAppIcons.collectAsStateWithLifecycle()
     val profile = profiles.firstOrNull()
-    val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
     var overlayOk by remember { mutableStateOf(PermissionHelper.canDrawOverlays(context)) }
@@ -137,7 +139,6 @@ fun SettingsScreen(
         }
     }
 
-    // Pre-load installed apps cache so AppPicker opens instantly
     LaunchedEffect(Unit) {
         viewModel.ensureInstalledAppsLoaded()
     }
@@ -161,7 +162,6 @@ fun SettingsScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(bottom = 100.dp),
         ) {
-            // --- Title Row: "Réglages" + Support pill ---
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -177,19 +177,15 @@ fun SettingsScreen(
                     fontSize = 28.sp,
                     color = colors.onSurface,
                 )
-
-                // Support pill
                 SupportPill(onClick = { showSupportSheet = true })
             }
 
             Spacer(Modifier.height(12.dp))
 
-            // --- Content wrapper ---
             Column(
                 modifier = Modifier.padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                // --- Profils : hero (défaut) + entrée "Tous les profils" ---
                 SectionHeader(stringResource(R.string.profiles_section_title))
                 val heroProfile = sortedProfiles.firstOrNull()
                 val heroIcons = heroProfile?.blockedPackages?.take(5)
@@ -246,8 +242,6 @@ fun SettingsScreen(
                     )
                 }
 
-                // --- 2x2 Action Cards Grid ---
-                // Row 1: Tags NFC + Session
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -255,9 +249,9 @@ fun SettingsScreen(
                     ActionCard(
                         modifier = Modifier.weight(1f),
                         icon = Icons.Outlined.Nfc,
-                        title = stringResource(R.string.settings_nfc_tags),
-                        subtitle = stringResource(R.string.settings_nfc_tags_count, nfcTags.size, if (nfcTags.size > 1) "s" else "", if (nfcTags.size > 1) "s" else ""),
-                        badge = "${nfcTags.size}",
+                        title = "Physical Latches",
+                        subtitle = if (latchDevices.size == 1) "1 physical Latch" else "${latchDevices.size} physical Latches",
+                        badge = "${latchDevices.size}",
                         onClick = onNavigateToNfcTags,
                     )
                     ActionCard(
@@ -270,7 +264,6 @@ fun SettingsScreen(
                     )
                 }
 
-                // Row 2: Apparence + Notifications
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -296,9 +289,7 @@ fun SettingsScreen(
                                     if (enabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
                                         && !PermissionHelper.areNotificationsEnabled(context)
                                     ) {
-                                        notificationPermissionLauncher.launch(
-                                            Manifest.permission.POST_NOTIFICATIONS,
-                                        )
+                                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                                     } else {
                                         viewModel.setNotificationsEnabled(context, enabled)
                                     }
@@ -313,7 +304,6 @@ fun SettingsScreen(
                     )
                 }
 
-                // --- SYSTÈME section label ---
                 Text(
                     text = stringResource(R.string.settings_system),
                     fontFamily = SatoshiFamily,
@@ -324,7 +314,6 @@ fun SettingsScreen(
                     modifier = Modifier.padding(top = 4.dp),
                 )
 
-                // --- System Cards ---
                 SettingsCard {
                     SettingsRow(
                         icon = Icons.Outlined.VerifiedUser,
@@ -382,7 +371,6 @@ fun SettingsScreen(
                     )
                 }
 
-                // --- À propos (standalone, no card) ---
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -423,14 +411,11 @@ fun SettingsScreen(
                     }
                 }
 
-                // --- Nous noter (standalone, no card) ---
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(52.dp)
-                        .clickable {
-                            RateHelper.openPlayStore(context)
-                        }
+                        .clickable { RateHelper.openPlayStore(context) }
                         .padding(horizontal = 16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -468,7 +453,6 @@ fun SettingsScreen(
         }
     }
 
-    // --- Apparence Bottom Sheet ---
     if (showThemeSheet) {
         ModalBottomSheet(
             onDismissRequest = { showThemeSheet = false },
@@ -510,18 +494,14 @@ fun SettingsScreen(
         }
     }
 
-    // --- Breathing Easter Egg Bottom Sheet ---
     if (showBreathingSheet) {
         BreathingBottomSheet(onDismiss = { showBreathingSheet = false })
     }
 
-    // --- Support Bottom Sheet ---
     if (showSupportSheet) {
         SupportBottomSheet(onDismiss = { showSupportSheet = false })
     }
 }
-
-// --- Action Card (for 2x2 grid) ---
 
 @Composable
 private fun ActionCard(
@@ -557,13 +537,11 @@ private fun ActionCard(
                 .padding(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 12.dp),
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
-            // Header: icon + badge/chevron/trailing
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                // Icon box
                 Box(
                     modifier = Modifier
                         .size(40.dp)
@@ -579,7 +557,6 @@ private fun ActionCard(
                     )
                 }
 
-                // Right side
                 when {
                     trailing != null -> trailing()
                     badge != null -> {
@@ -609,7 +586,6 @@ private fun ActionCard(
                 }
             }
 
-            // Title + Subtitle at bottom
             Column {
                 Text(
                     text = title,
