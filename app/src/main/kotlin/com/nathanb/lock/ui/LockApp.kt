@@ -38,11 +38,11 @@ import com.nathanb.lock.ui.components.ManualModeBanner
 import com.nathanb.lock.ui.components.ManualModeInfoSheet
 import com.nathanb.lock.ui.screens.AppPickerScreen
 import com.nathanb.lock.ui.screens.ProfileDetailScreen
-import com.nathanb.lock.ui.screens.ProfilesListScreen
-import com.nathanb.lock.ui.screens.NewProfileWizardScreen
 import com.nathanb.lock.ui.screens.HomeScreen
 import com.nathanb.lock.ui.screens.NfcTagsScreen
 import com.nathanb.lock.ui.screens.SettingsScreen
+import com.nathanb.lock.ui.screens.modes.ModesListScreen
+import com.nathanb.lock.ui.screens.modes.NewModeScreen
 import com.nathanb.lock.ui.screens.schedules.ScheduleEditScreen
 import com.nathanb.lock.ui.screens.schedules.SchedulesListScreen
 import com.nathanb.lock.ui.screens.onboarding.OnboardingScreen
@@ -62,17 +62,12 @@ fun LockApp(viewModel: LockViewModel, isNfcLaunch: Boolean = false) {
     val isSetupCompleted by viewModel.isSetupCompleted.collectAsStateWithLifecycle()
     var showSplash by remember { mutableStateOf(true) }
 
-    // Wait for DataStore to load before rendering — prevents flash to setup screen
     if (!isSetupLoaded) return
 
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     val lockState by viewModel.lockState.collectAsStateWithLifecycle()
-
-    // For NFC launches, the toggle already happened by the time we render.
-    // lockState.isLocked is the POST-toggle state. So if NFC + now free → was locked → unlock splash.
     val isUnlockingSplash = isNfcLaunch && !lockState.isLocked
 
-    // Show splash screen for ~2 seconds
     if (showSplash) {
         LockTheme(themeMode = themeMode) {
             SplashScreen(
@@ -86,8 +81,6 @@ fun LockApp(viewModel: LockViewModel, isNfcLaunch: Boolean = false) {
 
     val navController = rememberNavController()
     val startDestination = if (isSetupCompleted) "home" else "onboarding"
-
-    // Observe visual lock state (lags behind real state — waits for animation)
     val visualLocked by viewModel.visualLocked.collectAsStateWithLifecycle()
     val isEmergencyActive by viewModel.isEmergencyActive.collectAsStateWithLifecycle()
     val profilesForNav by viewModel.profilesSorted.collectAsStateWithLifecycle()
@@ -96,7 +89,6 @@ fun LockApp(viewModel: LockViewModel, isNfcLaunch: Boolean = false) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    // When lock activates, force navigate back to home
     LaunchedEffect(lockState.isLocked) {
         if (lockState.isLocked && currentRoute != null && currentRoute != "home" && currentRoute != "onboarding") {
             navController.navigate("home") {
@@ -108,9 +100,7 @@ fun LockApp(viewModel: LockViewModel, isNfcLaunch: Boolean = false) {
 
     val isManualMode = lockState.isManualMode
     var showManualModeInfo by remember { mutableStateOf(false) }
-
-    val showNavBar = currentRoute in TAB_ROUTES &&
-        (!visualLocked || isEmergencyActive)
+    val showNavBar = currentRoute in TAB_ROUTES && (!visualLocked || isEmergencyActive)
 
     LockTheme(themeMode = themeMode) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -215,32 +205,29 @@ fun LockApp(viewModel: LockViewModel, isNfcLaunch: Boolean = false) {
 
                 composable("stats") {
                     Box(modifier = if (bannerVisible) Modifier.padding(top = 48.dp) else Modifier) {
-                        StatsScreen(
-                            viewModel = viewModel,
-                        )
+                        StatsScreen(viewModel = viewModel)
                     }
                 }
 
+                // Temporary migration doorway: the inherited Profiles route now opens Latch Modes.
                 composable(
                     "profiles",
                     enterTransition = { slideInHorizontally(initialOffsetX = { it }) + fadeIn(tween(300)) },
                     popExitTransition = { slideOutHorizontally(targetOffsetX = { it }) + fadeOut(tween(300)) },
                 ) {
-                    ProfilesListScreen(
-                        viewModel = viewModel,
+                    ModesListScreen(
                         onBack = { navController.popBackStack() },
-                        onNavigateToProfileDetail = { navController.navigate("profile-detail/$it") },
-                        onNewProfile = { navController.navigate("new-profile") },
+                        onNewMode = { navController.navigate("new-profile") },
                     )
                 }
 
+                // Same temporary route reuse for Mode creation. Route names will be cleaned up later.
                 composable(
                     "new-profile",
                     enterTransition = { slideInHorizontally(initialOffsetX = { it }) + fadeIn(tween(300)) },
                     popExitTransition = { slideOutHorizontally(targetOffsetX = { it }) + fadeOut(tween(300)) },
                 ) {
-                    NewProfileWizardScreen(
-                        viewModel = viewModel,
+                    NewModeScreen(
                         onBack = { navController.popBackStack() },
                         onCreated = { navController.popBackStack() },
                     )
@@ -281,9 +268,7 @@ fun LockApp(viewModel: LockViewModel, isNfcLaunch: Boolean = false) {
                     enterTransition = { slideInHorizontally(initialOffsetX = { it }) + fadeIn(tween(300)) },
                     popExitTransition = { slideOutHorizontally(targetOffsetX = { it }) + fadeOut(tween(300)) },
                 ) {
-                    PermissionsScreen(
-                        onBack = { navController.popBackStack() },
-                    )
+                    PermissionsScreen(onBack = { navController.popBackStack() })
                 }
 
                 composable(
@@ -309,7 +294,6 @@ fun LockApp(viewModel: LockViewModel, isNfcLaunch: Boolean = false) {
                 }
             }
 
-            // Floating nav bar
             AnimatedVisibility(
                 visible = showNavBar,
                 enter = slideInVertically(
@@ -339,7 +323,6 @@ fun LockApp(viewModel: LockViewModel, isNfcLaunch: Boolean = false) {
                 )
             }
 
-            // Manual mode banner — top of screen on tab routes
             if (isManualMode && currentRoute in TAB_ROUTES && !visualLocked) {
                 ManualModeBanner(
                     onClick = { showManualModeInfo = true },
