@@ -12,6 +12,9 @@ internal data class ModeEditorDraft(
     val maxLatchDurationMs: Long?,
     val latchUid: String?,
     val unlatchUid: String?,
+    val autoLatchEnabled: Boolean,
+    val autoLatchDaysOfWeek: Int,
+    val autoLatchStartMinuteOfDay: Int,
     val step: Int,
 )
 
