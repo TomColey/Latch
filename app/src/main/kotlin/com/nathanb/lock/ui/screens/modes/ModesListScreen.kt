@@ -33,6 +33,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -51,12 +54,17 @@ fun ModesListScreen(
     onBack: () -> Unit,
     onNewMode: () -> Unit,
     onEditMode: (Long) -> Unit,
-    onAutoLatch: (Long) -> Unit,
 ) {
     val colors = LockTheme.colors
     val app = LocalContext.current.applicationContext as LockApplication
     val modes by app.latchRepository.modes.collectAsState(initial = emptyList())
     val schedules by app.latchRepository.autoLatchSchedules.collectAsState(initial = emptyList())
+    var autoLatchModeId by remember { mutableStateOf<Long?>(null) }
+
+    autoLatchModeId?.let { modeId ->
+        AutoLatchScreen(modeId = modeId, onBack = { autoLatchModeId = null })
+        return
+    }
 
     Scaffold(
         containerColor = colors.surface,
@@ -121,7 +129,7 @@ fun ModesListScreen(
                     mode = mode,
                     schedule = schedules.firstOrNull { it.modeId == mode.id },
                     onClick = { onEditMode(mode.id) },
-                    onAutoLatch = { onAutoLatch(mode.id) },
+                    onAutoLatch = { autoLatchModeId = mode.id },
                 )
             }
 
