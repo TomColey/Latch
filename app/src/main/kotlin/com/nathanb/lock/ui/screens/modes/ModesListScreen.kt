@@ -1,80 +1,164 @@
 package com.nathanb.lock.ui.screens.modes
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material3.Button
+import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.nathanb.lock.LockApplication
 import com.nathanb.lock.data.model.Mode
+import com.nathanb.lock.ui.theme.LockTheme
+import com.nathanb.lock.ui.theme.SatoshiFamily
 
 @Composable
 fun ModesListScreen(
     onBack: () -> Unit,
     onNewMode: () -> Unit,
+    onEditMode: (Long) -> Unit,
 ) {
+    val colors = LockTheme.colors
     val app = LocalContext.current.applicationContext as LockApplication
     val modes by app.latchRepository.modes.collectAsState(initial = emptyList())
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .padding(horizontal = 20.dp, vertical = 12.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
+    Scaffold(
+        containerColor = colors.surface,
+        topBar = {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .height(56.dp)
+                    .padding(horizontal = 20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                IconButton(onClick = onBack) {
+                    Icon(
+                        Icons.AutoMirrored.Outlined.ArrowBack,
+                        contentDescription = "Back",
+                        tint = colors.primary,
+                    )
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Modes",
+                        fontFamily = SatoshiFamily,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 24.sp,
+                        color = colors.onSurface,
+                        letterSpacing = (-0.5).sp,
+                    )
+                    Text(
+                        text = "Choose what gets through when your phone is latched",
+                        fontFamily = SatoshiFamily,
+                        fontSize = 13.sp,
+                        color = colors.onSurfaceVariant,
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(colors.surfaceContainer)
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                ) {
+                    Text(
+                        text = modes.size.toString(),
+                        fontFamily = SatoshiFamily,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 13.sp,
+                        color = colors.onSurfaceVariant,
+                    )
+                }
+            }
+        },
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
-            }
-            Text(
-                text = "Modes",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-            )
-            Spacer(Modifier.weight(1f))
-            Button(onClick = onNewMode) {
-                Icon(Icons.Outlined.Add, contentDescription = null)
-                Text(" New Mode")
-            }
-        }
+            Spacer(Modifier.height(4.dp))
 
-        Text(
-            text = "A Mode decides what gets through while your phone is latched.",
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.padding(vertical = 16.dp),
-        )
+            modes.forEach { mode ->
+                ModeListItem(mode = mode, onClick = { onEditMode(mode.id) })
+            }
 
-        if (modes.isEmpty()) {
-            Text("No Modes yet. Create one to get started.")
-        } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                items(modes, key = { it.id }) { mode ->
-                    ModeCard(mode)
+            if (modes.isEmpty()) {
+                Text(
+                    text = "No Modes yet. Create one to decide what you want to let through.",
+                    fontFamily = SatoshiFamily,
+                    fontSize = 13.sp,
+                    color = colors.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 8.dp),
+                )
+            }
+
+            Spacer(Modifier.height(6.dp))
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = colors.surfaceContainer),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                onClick = onNewMode,
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                ) {
+                    Icon(
+                        Icons.Outlined.Add,
+                        contentDescription = null,
+                        tint = colors.primaryDark,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Text(
+                        text = "New Mode",
+                        fontFamily = SatoshiFamily,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp,
+                        color = colors.primaryDark,
+                        modifier = Modifier.padding(start = 8.dp),
+                    )
                 }
             }
         }
@@ -82,17 +166,59 @@ fun ModesListScreen(
 }
 
 @Composable
-private fun ModeCard(mode: Mode) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(mode.name, fontWeight = FontWeight.Bold)
-            Text(
-                text = "${mode.allowedPackages.size} apps get through",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Text(
-                text = "Maximum latch time: ${formatDuration(mode.maxLatchDurationMs)}",
-                style = MaterialTheme.typography.bodySmall,
+private fun ModeListItem(mode: Mode, onClick: () -> Unit) {
+    val colors = LockTheme.colors
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = colors.cardContainer),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        onClick = onClick,
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(colors.primary.copy(alpha = 0.12f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Shield,
+                    contentDescription = null,
+                    tint = colors.primaryDark,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(
+                    text = mode.name,
+                    fontFamily = SatoshiFamily,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 16.sp,
+                    color = colors.onSurface,
+                )
+                Text(
+                    text = "${mode.allowedPackages.size} apps get through · ${formatDuration(mode.maxLatchDurationMs)} max",
+                    fontFamily = SatoshiFamily,
+                    fontSize = 13.sp,
+                    color = colors.onSurfaceVariant,
+                )
+            }
+
+            Icon(
+                imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                contentDescription = null,
+                tint = colors.onSurfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.size(20.dp),
             )
         }
     }
