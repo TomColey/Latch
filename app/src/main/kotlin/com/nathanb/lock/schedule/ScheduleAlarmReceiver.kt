@@ -9,11 +9,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
-/**
- * Wakes both schedule engines on their alarms and on events that invalidate armed alarms or shift
- * wall-clock time. The inherited Lock engine still owns start/end windows; Latch Auto-latch owns
- * one-way Mode activation only.
- */
 class ScheduleAlarmReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -36,7 +31,9 @@ class ScheduleAlarmReceiver : BroadcastReceiver() {
                 withTimeoutOrNull(RECEIVER_TIMEOUT_MS) {
                     when (action) {
                         ACTION_WINDOW_BOUNDARY -> app.scheduleManager.evaluateAndRearm()
-                        ACTION_AUTO_LATCH -> app.autoLatchManager.handleAlarm()
+                        ACTION_AUTO_LATCH -> app.autoLatchManager.handleAlarm(
+                            intent.getLongExtra(EXTRA_AUTO_LATCH_TRIGGER_AT, 0L)
+                        )
                         else -> {
                             app.scheduleManager.evaluateAndRearm()
                             app.autoLatchManager.rearm()
@@ -52,6 +49,7 @@ class ScheduleAlarmReceiver : BroadcastReceiver() {
     companion object {
         const val ACTION_WINDOW_BOUNDARY = "com.nathanb.lock.action.SCHEDULE_WINDOW_BOUNDARY"
         const val ACTION_AUTO_LATCH = "com.tomcoley.latch.action.AUTO_LATCH"
+        const val EXTRA_AUTO_LATCH_TRIGGER_AT = "auto_latch_trigger_at"
         private const val RECEIVER_TIMEOUT_MS = 8_000L
     }
 }
