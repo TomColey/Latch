@@ -90,6 +90,14 @@ data class Mode(
     val createdAt: Long = System.currentTimeMillis(),
 )
 
+/** Persisted latch state. A null Mode id means the phone is unlatched. */
+data class ActiveModeState(
+    val activeModeId: Long? = null,
+    val latchedAt: Long? = null,
+) {
+    val isLatched: Boolean get() = activeModeId != null
+}
+
 /** A named physical NFC tag used by Latch. */
 @Entity(tableName = "latch_devices")
 data class LatchDevice(

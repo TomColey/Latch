@@ -63,6 +63,7 @@ class LockApplication : Application() {
         )
 
         latchRepository = LatchRepository(
+            context = this,
             modeDao = database.modeDao(),
             latchDeviceDao = database.latchDeviceDao(),
             modeLatchDao = database.modeLatchDao(),

@@ -32,8 +32,10 @@ class AppBlockerService : AccessibilityService() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var blockedPackages: Set<String> = emptySet()
+    private var activeModeAllowedPackages: Set<String>? = null
     private var isEmergencyPaused = false
     private var isNoEscapeSession = false
+    private var protectedPackages: Set<String> = emptySet()
     private lateinit var overlayManager: BlockOverlayManager
     private lateinit var homeTracker: HomeConfirmationTracker
     private var homeRetryJob: Job? = null
@@ -46,12 +48,19 @@ class AppBlockerService : AccessibilityService() {
             launcherPackages = resolveLauncherPackages(),
             ownPackage = packageName,
         )
+        protectedPackages = Constants.WHITELISTED_PACKAGES + resolveLauncherPackages() + packageName
 
         val app = application as LockApplication
         scope.launch {
             app.repository.blockedPackages.collect { packages ->
                 blockedPackages = packages
                 if (BuildConfig.DEBUG) Log.d(TAG, "Blocked packages updated: ${packages.size} apps")
+            }
+        }
+        scope.launch {
+            app.latchRepository.activeMode.collect { mode ->
+                activeModeAllowedPackages = mode?.allowedPackages?.toSet()
+                if (BuildConfig.DEBUG) Log.d(TAG, "Active Mode: ${mode?.name ?: "unlatched"}")
             }
         }
         scope.launch {
@@ -69,7 +78,8 @@ class AppBlockerService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event?.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
-        if (isEmergencyPaused) {
+        // The inherited emergency pause must not become a manual bypass for a Latch Mode.
+        if (isEmergencyPaused && activeModeAllowedPackages == null) {
             if (overlayManager.isShowing) overlayManager.dismiss()
             return
         }
@@ -82,9 +92,9 @@ class AppBlockerService : AccessibilityService() {
             homeRetryJob = null
         }
 
-        if (packageName in Constants.WHITELISTED_PACKAGES) return
+        if (packageName in protectedPackages) return
 
-        if (packageName in blockedPackages) {
+        if (shouldBlockPackage(packageName, blockedPackages, activeModeAllowedPackages, protectedPackages)) {
             // Only react to real screens. Blocked apps also emit window events for popups,
             // menus and banners, sometimes while already in the background (Gmail shows
             // one ~1 s after launch), and those must not re-trigger the overlay.
@@ -134,7 +144,9 @@ class AppBlockerService : AccessibilityService() {
         homeRetryJob?.cancel()
         homeRetryJob = scope.launch {
             delay(HOME_CONFIRMATION_TIMEOUT_MS)
-            if (homeTracker.shouldRetry() && !isEmergencyPaused && blockedPackages.isNotEmpty()) {
+            val blockingIsActive = activeModeAllowedPackages != null || blockedPackages.isNotEmpty()
+            val blockingIsPaused = isEmergencyPaused && activeModeAllowedPackages == null
+            if (homeTracker.shouldRetry() && !blockingIsPaused && blockingIsActive) {
                 if (BuildConfig.DEBUG) Log.w(TAG, "Home not confirmed, launching home")
                 launchHome()
             }
@@ -183,5 +195,19 @@ class AppBlockerService : AccessibilityService() {
     fun setEmergencyPause(paused: Boolean) {
         isEmergencyPaused = paused
         if (BuildConfig.DEBUG) Log.d(TAG, "Emergency pause: $paused")
+    }
+}
+
+internal fun shouldBlockPackage(
+    packageName: String,
+    inheritedBlockedPackages: Set<String>,
+    activeModeAllowedPackages: Set<String>?,
+    protectedPackages: Set<String>,
+): Boolean {
+    if (packageName in protectedPackages) return false
+    return if (activeModeAllowedPackages != null) {
+        packageName !in activeModeAllowedPackages
+    } else {
+        packageName in inheritedBlockedPackages
     }
 }

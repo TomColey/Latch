@@ -1,5 +1,11 @@
 package com.nathanb.lock.data.repository
 
+import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.preferencesDataStore
 import androidx.room.withTransaction
 import com.nathanb.lock.data.database.AutoLatchScheduleDao
 import com.nathanb.lock.data.database.LatchDeviceDao
@@ -7,31 +13,113 @@ import com.nathanb.lock.data.database.LockDatabase
 import com.nathanb.lock.data.database.ModeDao
 import com.nathanb.lock.data.database.ModeLatchDao
 import com.nathanb.lock.data.model.AutoLatchSchedule
+import com.nathanb.lock.data.model.ActiveModeState
 import com.nathanb.lock.data.model.LatchAction
 import com.nathanb.lock.data.model.LatchDevice
 import com.nathanb.lock.data.model.Mode
 import com.nathanb.lock.data.model.ModeLatchLink
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+
+private val Context.latchDataStore by preferencesDataStore(name = "latch_prefs")
 
 /**
  * Repository for Latch's new domain model.
  *
  * Kept separate from the inherited LockRepository while the app is transitioned in small,
- * testable steps. This repository does not yet control blocking or NFC session behaviour.
+ * testable steps. Active Mode state now drives allow-list enforcement; NFC routing follows later.
  */
 class LatchRepository(
+    private val context: Context? = null,
     private val modeDao: ModeDao,
     private val latchDeviceDao: LatchDeviceDao,
     private val modeLatchDao: ModeLatchDao,
     private val autoLatchScheduleDao: AutoLatchScheduleDao,
     private val database: LockDatabase,
+    private val dataStore: DataStore<Preferences> = context!!.latchDataStore,
+    ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val now: () -> Long = System::currentTimeMillis,
 ) {
+    private object Keys {
+        val ACTIVE_MODE_ID = longPreferencesKey("active_mode_id")
+        val LATCHED_AT = longPreferencesKey("latched_at")
+    }
+
+    private val scope = CoroutineScope(SupervisorJob() + ioDispatcher)
+
     val modes: Flow<List<Mode>> = modeDao.getAll()
     val latchDevices: Flow<List<LatchDevice>> = latchDeviceDao.getAll()
     val modeLatchLinks: Flow<List<ModeLatchLink>> = modeLatchDao.getAll()
     val autoLatchSchedules: Flow<List<AutoLatchSchedule>> = autoLatchScheduleDao.getAll()
 
+    val activeModeState: StateFlow<ActiveModeState> = dataStore.data
+        .map { preferences ->
+            ActiveModeState(
+                activeModeId = preferences[Keys.ACTIVE_MODE_ID],
+                latchedAt = preferences[Keys.LATCHED_AT],
+            )
+        }
+        .distinctUntilChanged()
+        .stateIn(scope, SharingStarted.Eagerly, ActiveModeState())
+
+    /** The single Mode currently enforced, or null while the phone is unlatched. */
+    val activeMode: StateFlow<Mode?> = combine(activeModeState, modes) { state, allModes ->
+        allModes.firstOrNull { it.id == state.activeModeId }
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+
+    init {
+        // The maximum duration is a safety release, including after process restart.
+        scope.launch {
+            combine(activeModeState, activeMode) { state, mode -> state to mode }
+                .collectLatest { (state, mode) ->
+                    val latchedAt = state.latchedAt ?: return@collectLatest
+                    val duration = mode?.maxLatchDurationMs ?: return@collectLatest
+                    val remaining = (latchedAt + duration - now()).coerceAtLeast(0L)
+                    delay(remaining)
+                    if (activeModeState.value == state) unlatch()
+                }
+        }
+    }
+
     suspend fun getMode(id: Long): Mode? = modeDao.getById(id)
+
+    /** Activates [modeId], replacing any currently active Mode. */
+    suspend fun latch(modeId: Long): Boolean {
+        if (modeDao.getById(modeId) == null) return false
+        dataStore.edit { preferences ->
+            preferences[Keys.ACTIVE_MODE_ID] = modeId
+            preferences[Keys.LATCHED_AT] = now()
+        }
+        return true
+    }
+
+    suspend fun unlatch() {
+        dataStore.edit { preferences ->
+            preferences.remove(Keys.ACTIVE_MODE_ID)
+            preferences.remove(Keys.LATCHED_AT)
+        }
+    }
+
+    suspend fun toggle(modeId: Long): Boolean {
+        return if (activeModeState.value.activeModeId == modeId) {
+            unlatch()
+            false
+        } else {
+            latch(modeId)
+        }
+    }
 
     suspend fun createMode(
         name: String,
@@ -50,6 +138,7 @@ class LatchRepository(
     }
 
     suspend fun deleteMode(mode: Mode) {
+        if (activeModeState.value.activeModeId == mode.id) unlatch()
         modeDao.delete(mode)
     }
 
