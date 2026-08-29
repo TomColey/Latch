@@ -138,27 +138,13 @@ fun LockApp(viewModel: LockViewModel, isNfcLaunch: Boolean = false) {
                     Box(modifier = if (bannerVisible) Modifier.padding(top = 48.dp) else Modifier) {
                         SettingsScreen(
                             viewModel = viewModel,
-                            onNavigateToProfileDetail = { id ->
-                                navController.navigate("profile-detail/$id")
-                            },
-                            onNavigateToProfiles = {
-                                navController.navigate("profiles")
-                            },
-                            onNavigateToNfcTags = {
-                                navController.navigate("nfc-tags")
-                            },
-                            onNavigateToPermissions = {
-                                navController.navigate("permissions")
-                            },
-                            onNavigateToData = {
-                                navController.navigate("data")
-                            },
-                            onNavigateToSessionSettings = {
-                                navController.navigate("session-settings")
-                            },
-                            onNavigateToSchedules = {
-                                navController.navigate("schedules")
-                            },
+                            onNavigateToProfileDetail = { id -> navController.navigate("profile-detail/$id") },
+                            onNavigateToProfiles = { navController.navigate("profiles") },
+                            onNavigateToNfcTags = { navController.navigate("nfc-tags") },
+                            onNavigateToPermissions = { navController.navigate("permissions") },
+                            onNavigateToData = { navController.navigate("data") },
+                            onNavigateToSessionSettings = { navController.navigate("session-settings") },
+                            onNavigateToSchedules = { navController.navigate("schedules") },
                         )
                     }
                 }
@@ -209,7 +195,6 @@ fun LockApp(viewModel: LockViewModel, isNfcLaunch: Boolean = false) {
                     }
                 }
 
-                // Temporary migration doorway: the inherited Profiles route now opens Latch Modes.
                 composable(
                     "profiles",
                     enterTransition = { slideInHorizontally(initialOffsetX = { it }) + fadeIn(tween(300)) },
@@ -218,18 +203,34 @@ fun LockApp(viewModel: LockViewModel, isNfcLaunch: Boolean = false) {
                     ModesListScreen(
                         onBack = { navController.popBackStack() },
                         onNewMode = { navController.navigate("new-profile") },
+                        onEditMode = { id -> navController.navigate("mode-edit/$id") },
                     )
                 }
 
-                // Same temporary route reuse for Mode creation. Route names will be cleaned up later.
                 composable(
                     "new-profile",
                     enterTransition = { slideInHorizontally(initialOffsetX = { it }) + fadeIn(tween(300)) },
                     popExitTransition = { slideOutHorizontally(targetOffsetX = { it }) + fadeOut(tween(300)) },
                 ) {
                     NewModeScreen(
+                        viewModel = viewModel,
                         onBack = { navController.popBackStack() },
-                        onCreated = { navController.popBackStack() },
+                        onSaved = { navController.popBackStack() },
+                    )
+                }
+
+                composable(
+                    "mode-edit/{modeId}",
+                    arguments = listOf(navArgument("modeId") { type = NavType.LongType }),
+                    enterTransition = { slideInHorizontally(initialOffsetX = { it }) + fadeIn(tween(300)) },
+                    popExitTransition = { slideOutHorizontally(targetOffsetX = { it }) + fadeOut(tween(300)) },
+                ) { backStackEntry ->
+                    val id = backStackEntry.arguments?.getLong("modeId") ?: return@composable
+                    NewModeScreen(
+                        viewModel = viewModel,
+                        modeId = id,
+                        onBack = { navController.popBackStack() },
+                        onSaved = { navController.popBackStack() },
                     )
                 }
 
