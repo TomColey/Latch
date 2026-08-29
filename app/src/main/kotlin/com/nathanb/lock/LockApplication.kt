@@ -9,6 +9,7 @@ import com.nathanb.lock.data.database.MIGRATION_3_4
 import com.nathanb.lock.data.database.MIGRATION_4_5
 import com.nathanb.lock.data.database.MIGRATION_5_6
 import com.nathanb.lock.data.repository.LatchRepository
+import com.nathanb.lock.data.repository.LatchRuntime
 import com.nathanb.lock.data.repository.LockRepository
 import com.nathanb.lock.schedule.AndroidScheduleEffects
 import com.nathanb.lock.schedule.ScheduleManager
@@ -70,6 +71,7 @@ class LockApplication : Application() {
             autoLatchScheduleDao = database.autoLatchScheduleDao(),
             database = database,
         )
+        LatchRuntime.install(latchRepository)
 
         scheduleManager = ScheduleManager(repository, AndroidScheduleEffects(this))
         // Any session end (NFC, manual, timeout, FGS...) re-evaluates the inherited Lock windows.
