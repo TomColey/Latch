@@ -12,16 +12,16 @@ import java.time.Instant
 import java.time.ZonedDateTime
 import java.util.concurrent.atomic.AtomicBoolean
 
-/** Platform alarm effects for Latch's one-way Auto-latch scheduler. */
 interface AutoLatchEffects {
     fun arm(triggerAtEpochMillis: Long)
     fun cancel()
 }
 
 class AndroidAutoLatchEffects(private val context: Context) : AutoLatchEffects {
-    private fun pendingIntent(): PendingIntent {
+    private fun pendingIntent(triggerAtEpochMillis: Long = 0L): PendingIntent {
         val intent = Intent(context, ScheduleAlarmReceiver::class.java)
             .setAction(ScheduleAlarmReceiver.ACTION_AUTO_LATCH)
+            .putExtra(ScheduleAlarmReceiver.EXTRA_AUTO_LATCH_TRIGGER_AT, triggerAtEpochMillis)
         return PendingIntent.getBroadcast(
             context,
             AUTO_LATCH_REQUEST_CODE,
@@ -32,14 +32,15 @@ class AndroidAutoLatchEffects(private val context: Context) : AutoLatchEffects {
 
     override fun arm(triggerAtEpochMillis: Long) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val pendingIntent = pendingIntent(triggerAtEpochMillis)
         if (alarmManager.canScheduleExactAlarms()) {
             alarmManager.setExactAndAllowWhileIdle(
                 AlarmManager.RTC_WAKEUP,
                 triggerAtEpochMillis,
-                pendingIntent(),
+                pendingIntent,
             )
         } else {
-            alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAtEpochMillis, pendingIntent())
+            alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAtEpochMillis, pendingIntent)
         }
     }
 
@@ -55,9 +56,8 @@ class AndroidAutoLatchEffects(private val context: Context) : AutoLatchEffects {
 
 /**
  * One-way scheduled activation for Latch Modes.
- *
- * Auto-latch deliberately has no end boundary. An alarm may activate a Mode only while the phone
- * is currently unlatched. Once a Mode is active, schedules cannot replace it or release it.
+ * Schedules can start a Mode only while Latch is currently unlatched. They never release or
+ * replace an active Mode.
  */
 class AutoLatchManager(
     private val repository: LatchRepository,
@@ -82,25 +82,35 @@ class AutoLatchManager(
         }
     }
 
-    /** Called only for the Auto-latch alarm action. */
-    suspend fun handleAlarm() {
-        val firedAt = now()
+    /** Called only for an Auto-latch alarm. The intended trigger time survives process death. */
+    suspend fun handleAlarm(triggerAtEpochMillis: Long) {
+        if (triggerAtEpochMillis <= 0L) {
+            rearm()
+            return
+        }
+
+        val current = now()
+        val scheduledAt = Instant.ofEpochMilli(triggerAtEpochMillis).atZone(current.zone)
+        if (current.toInstant().isBefore(scheduledAt.toInstant())) {
+            rearm()
+            return
+        }
+
         val schedules = repository.autoLatchSchedules.first()
         val dueModeIds = schedules
             .asSequence()
-            .filter { it.enabled && it.isDueAt(firedAt) }
+            .filter { it.enabled && it.isDueAt(scheduledAt) }
             .map { it.modeId }
             .distinct()
             .toList()
 
-        // Never replace an active Mode. If two different Modes are due in the same minute,
-        // ambiguity is safer as a no-op than silently choosing one by database order.
+        // Never replace an active Mode. Simultaneous Auto-latches for different Modes are
+        // intentionally treated as ambiguous rather than resolved by database order.
         if (repository.activeModeState.value.activeModeId == null && dueModeIds.size == 1) {
             repository.latch(dueModeIds.single())
         }
 
-        // Move beyond the current minute so the alarm we just handled cannot be selected again.
-        armNext(reference = firedAt.plusMinutes(1).withSecond(0).withNano(0))
+        armNext(reference = current)
     }
 
     private suspend fun armNext(reference: ZonedDateTime = now()) {
