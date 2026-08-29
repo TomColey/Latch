@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -35,12 +36,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nathanb.lock.LockApplication
+import com.nathanb.lock.data.model.AutoLatchSchedule
 import com.nathanb.lock.data.model.Mode
 import com.nathanb.lock.ui.theme.LockTheme
 import com.nathanb.lock.ui.theme.SatoshiFamily
@@ -50,10 +51,12 @@ fun ModesListScreen(
     onBack: () -> Unit,
     onNewMode: () -> Unit,
     onEditMode: (Long) -> Unit,
+    onAutoLatch: (Long) -> Unit,
 ) {
     val colors = LockTheme.colors
     val app = LocalContext.current.applicationContext as LockApplication
     val modes by app.latchRepository.modes.collectAsState(initial = emptyList())
+    val schedules by app.latchRepository.autoLatchSchedules.collectAsState(initial = emptyList())
 
     Scaffold(
         containerColor = colors.surface,
@@ -68,11 +71,7 @@ fun ModesListScreen(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 IconButton(onClick = onBack) {
-                    Icon(
-                        Icons.AutoMirrored.Outlined.ArrowBack,
-                        contentDescription = "Back",
-                        tint = colors.primary,
-                    )
+                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back", tint = colors.primary)
                 }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -118,7 +117,12 @@ fun ModesListScreen(
             Spacer(Modifier.height(4.dp))
 
             modes.forEach { mode ->
-                ModeListItem(mode = mode, onClick = { onEditMode(mode.id) })
+                ModeListItem(
+                    mode = mode,
+                    schedule = schedules.firstOrNull { it.modeId == mode.id },
+                    onClick = { onEditMode(mode.id) },
+                    onAutoLatch = { onAutoLatch(mode.id) },
+                )
             }
 
             if (modes.isEmpty()) {
@@ -145,12 +149,7 @@ fun ModesListScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center,
                 ) {
-                    Icon(
-                        Icons.Outlined.Add,
-                        contentDescription = null,
-                        tint = colors.primaryDark,
-                        modifier = Modifier.size(20.dp),
-                    )
+                    Icon(Icons.Outlined.Add, contentDescription = null, tint = colors.primaryDark, modifier = Modifier.size(20.dp))
                     Text(
                         text = "New Mode",
                         fontFamily = SatoshiFamily,
@@ -166,7 +165,12 @@ fun ModesListScreen(
 }
 
 @Composable
-private fun ModeListItem(mode: Mode, onClick: () -> Unit) {
+private fun ModeListItem(
+    mode: Mode,
+    schedule: AutoLatchSchedule?,
+    onClick: () -> Unit,
+    onAutoLatch: () -> Unit,
+) {
     val colors = LockTheme.colors
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -181,24 +185,13 @@ private fun ModeListItem(mode: Mode, onClick: () -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(colors.primary.copy(alpha = 0.12f)),
+                modifier = Modifier.size(44.dp).clip(CircleShape).background(colors.primary.copy(alpha = 0.12f)),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(
-                    imageVector = Icons.Outlined.Shield,
-                    contentDescription = null,
-                    tint = colors.primaryDark,
-                    modifier = Modifier.size(22.dp),
-                )
+                Icon(Icons.Outlined.Shield, contentDescription = null, tint = colors.primaryDark, modifier = Modifier.size(22.dp))
             }
 
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
                     text = mode.name,
                     fontFamily = SatoshiFamily,
@@ -212,8 +205,22 @@ private fun ModeListItem(mode: Mode, onClick: () -> Unit) {
                     fontSize = 13.sp,
                     color = colors.onSurfaceVariant,
                 )
+                Text(
+                    text = autoLatchSummary(schedule),
+                    fontFamily = SatoshiFamily,
+                    fontSize = 12.sp,
+                    color = if (schedule?.enabled == true) colors.primaryDark else colors.onSurfaceVariant,
+                )
             }
 
+            IconButton(onClick = onAutoLatch) {
+                Icon(
+                    imageVector = Icons.Outlined.Schedule,
+                    contentDescription = "Auto-latch",
+                    tint = if (schedule?.enabled == true) colors.primary else colors.onSurfaceVariant,
+                    modifier = Modifier.size(21.dp),
+                )
+            }
             Icon(
                 imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
                 contentDescription = null,
@@ -222,6 +229,13 @@ private fun ModeListItem(mode: Mode, onClick: () -> Unit) {
             )
         }
     }
+}
+
+private fun autoLatchSummary(schedule: AutoLatchSchedule?): String {
+    if (schedule == null || !schedule.enabled) return "Auto-latch off"
+    val hour = schedule.startMinuteOfDay / 60
+    val minute = schedule.startMinuteOfDay % 60
+    return "Auto-latch ${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}"
 }
 
 private fun formatDuration(durationMs: Long): String {
