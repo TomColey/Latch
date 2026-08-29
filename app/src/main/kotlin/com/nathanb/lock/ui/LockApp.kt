@@ -33,6 +33,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.nathanb.lock.LockApplication
 import com.nathanb.lock.ui.components.FloatingNavBar
 import com.nathanb.lock.ui.components.ManualModeBanner
 import com.nathanb.lock.ui.components.ManualModeInfoSheet
@@ -90,11 +91,19 @@ fun LockApp(viewModel: LockViewModel, isNfcLaunch: Boolean = false) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    LaunchedEffect(lockState.isLocked) {
-        if (lockState.isLocked && currentRoute != null && currentRoute != "home" && currentRoute != "onboarding") {
-            navController.navigate("home") {
-                popUpTo("home") { inclusive = true }
-                launchSingleTop = true
+    val app = viewModel.getApplication<android.app.Application>() as LockApplication
+    val latchState by app.latchRepository.activeModeState.collectAsStateWithLifecycle()
+    var previousActiveModeId by remember { mutableStateOf(latchState.activeModeId) }
+
+    LaunchedEffect(latchState.activeModeId) {
+        val newActiveModeId = latchState.activeModeId
+        if (newActiveModeId != previousActiveModeId) {
+            previousActiveModeId = newActiveModeId
+            if (currentRoute != null && currentRoute != "home" && currentRoute != "onboarding") {
+                navController.navigate("home") {
+                    popUpTo("home") { inclusive = false }
+                    launchSingleTop = true
+                }
             }
         }
     }
