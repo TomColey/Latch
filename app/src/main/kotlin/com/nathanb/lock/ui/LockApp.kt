@@ -216,6 +216,7 @@ fun LockApp(viewModel: LockViewModel, isNfcLaunch: Boolean = false) {
                         viewModel = viewModel,
                         onBack = { navController.popBackStack() },
                         onSaved = { navController.popBackStack() },
+                        onEditConflictingMode = { id -> navController.navigate("mode-edit/$id") },
                     )
                 }
 
@@ -231,6 +232,7 @@ fun LockApp(viewModel: LockViewModel, isNfcLaunch: Boolean = false) {
                         modeId = id,
                         onBack = { navController.popBackStack() },
                         onSaved = { navController.popBackStack() },
+                        onEditConflictingMode = { conflictId -> navController.navigate("mode-edit/$conflictId") },
                     )
                 }
 
