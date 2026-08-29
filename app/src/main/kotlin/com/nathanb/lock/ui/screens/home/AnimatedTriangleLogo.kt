@@ -17,6 +17,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nathanb.lock.BuildConfig
 import com.nathanb.lock.R
 
 private val LatchDevOrange = Color(0xFFFF7A00)
@@ -61,11 +62,11 @@ internal fun AnimatedTriangleLogo(
         Spacer(Modifier.height(10.dp))
 
         Text(
-            text = "DEV BUILD",
+            text = "DEV BUILD ${BuildConfig.VERSION_NAME}",
             color = LatchDevOrange,
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
-            letterSpacing = 2.sp,
+            letterSpacing = 1.4.sp,
         )
     }
 }
