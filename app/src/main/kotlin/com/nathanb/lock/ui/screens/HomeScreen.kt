@@ -22,6 +22,7 @@ import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Nfc
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Shield
+import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -30,6 +31,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,13 +41,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import com.nathanb.lock.BuildConfig
 import com.nathanb.lock.LockApplication
 import com.nathanb.lock.R
@@ -55,6 +59,7 @@ import com.nathanb.lock.ui.screens.home.ManualLockButton
 import com.nathanb.lock.ui.theme.LockTheme
 import com.nathanb.lock.ui.theme.SatoshiFamily
 import com.nathanb.lock.ui.viewmodel.LockViewModel
+import com.nathanb.lock.util.PermissionHelper
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -69,7 +74,9 @@ fun HomeScreen(
     onNavigateToNfcTags: () -> Unit = {},
 ) {
     val colors = LockTheme.colors
-    val app = LocalContext.current.applicationContext as LockApplication
+    val context = LocalContext.current
+    val app = context.applicationContext as LockApplication
+    val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
 
     val modes by app.latchRepository.modes.collectAsState(initial = emptyList())
@@ -78,6 +85,17 @@ fun HomeScreen(
     val modeLatchLinks by app.latchRepository.modeLatchLinks.collectAsState(initial = emptyList())
     val latchDevices by app.latchRepository.latchDevices.collectAsState(initial = emptyList())
 
+    var accessibilityOk by remember { mutableStateOf(PermissionHelper.isAccessibilityServiceEnabled(context)) }
+    var overlayOk by remember { mutableStateOf(PermissionHelper.canDrawOverlays(context)) }
+
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            accessibilityOk = PermissionHelper.isAccessibilityServiceEnabled(context)
+            overlayOk = PermissionHelper.canDrawOverlays(context)
+        }
+    }
+
+    val permissionsOk = accessibilityOk && overlayOk
     val isLatched = activeModeState.isLatched && activeMode != null
     var showModePicker by remember { mutableStateOf(false) }
     val latchNowFill = remember { Animatable(0f) }
@@ -122,7 +140,7 @@ fun HomeScreen(
                 .padding(horizontal = 28.dp, vertical = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Spacer(Modifier.weight(0.7f))
+            Spacer(Modifier.weight(0.45f))
 
             androidx.compose.foundation.Image(
                 painter = painterResource(R.drawable.ic_latch_logo),
@@ -144,7 +162,16 @@ fun HomeScreen(
                 )
             }
 
-            Spacer(Modifier.height(42.dp))
+            if (!permissionsOk) {
+                Spacer(Modifier.height(18.dp))
+                PermissionWarningCard(
+                    accessibilityOk = accessibilityOk,
+                    overlayOk = overlayOk,
+                    onClick = onNavigateToPermissions,
+                )
+            }
+
+            Spacer(Modifier.height(if (permissionsOk) 42.dp else 28.dp))
 
             if (isLatched) {
                 LatchedHomeContent(
@@ -256,6 +283,66 @@ fun HomeScreen(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PermissionWarningCard(
+    accessibilityOk: Boolean,
+    overlayOk: Boolean,
+    onClick: () -> Unit,
+) {
+    val colors = LockTheme.colors
+    val missing = buildList {
+        if (!accessibilityOk) add("Accessibility")
+        if (!overlayOk) add("Display over other apps")
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = colors.error.copy(alpha = 0.08f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        onClick = onClick,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(42.dp)
+                    .clip(RoundedCornerShape(13.dp))
+                    .background(colors.error.copy(alpha = 0.12f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.WarningAmber,
+                    contentDescription = null,
+                    tint = colors.error,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Latch needs attention",
+                    fontFamily = SatoshiFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = colors.onSurface,
+                )
+                Text(
+                    text = "Missing: ${missing.joinToString(", ")}. Tap to fix permissions.",
+                    fontFamily = SatoshiFamily,
+                    fontSize = 12.sp,
+                    lineHeight = 17.sp,
+                    color = colors.onSurfaceVariant,
+                )
             }
         }
     }
