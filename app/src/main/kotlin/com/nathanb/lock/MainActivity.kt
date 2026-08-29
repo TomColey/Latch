@@ -106,9 +106,19 @@ class MainActivity : ComponentActivity() {
                 ).show()
             }
             is NfcResult.ModeActionIgnored -> {
-                if (BuildConfig.DEBUG) {
-                    Toast.makeText(this, "This Latch has no action here", Toast.LENGTH_SHORT).show()
+                val required = result.requiredLatchNames
+                val message = when {
+                    required.isEmpty() -> "This Latch has no action here"
+                    required.size == 1 -> {
+                        val mode = result.activeModeName?.let { "$it: " } ?: ""
+                        "${mode}scan ${required.first()} to unlatch"
+                    }
+                    else -> {
+                        val mode = result.activeModeName?.let { "$it: " } ?: ""
+                        "${mode}scan ${required.dropLast(1).joinToString(", ")} or ${required.last()} to unlatch"
+                    }
                 }
+                Toast.makeText(this, message, Toast.LENGTH_LONG).show()
             }
             is NfcResult.IgnoredNoEscapeActive -> {
                 Toast.makeText(this, getString(R.string.toast_no_escape_active), Toast.LENGTH_SHORT).show()
