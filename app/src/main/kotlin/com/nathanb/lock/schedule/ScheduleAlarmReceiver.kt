@@ -10,16 +10,17 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
- * Wakes the schedule engine on window boundaries (explicit alarm PendingIntent) and on
- * every event that invalidates armed alarms or shifts wall-clock time: app update,
- * time/timezone change, exact-alarm permission change. Each trigger is a full
- * re-evaluation, so spurious or duplicate deliveries are harmless.
+ * Wakes both schedule engines on their alarms and on events that invalidate armed alarms or shift
+ * wall-clock time. The inherited Lock engine still owns start/end windows; Latch Auto-latch owns
+ * one-way Mode activation only.
  */
 class ScheduleAlarmReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
-        when (intent.action) {
+        val action = intent.action
+        when (action) {
             ACTION_WINDOW_BOUNDARY,
+            ACTION_AUTO_LATCH,
             Intent.ACTION_MY_PACKAGE_REPLACED,
             Intent.ACTION_TIME_CHANGED,
             Intent.ACTION_TIMEZONE_CHANGED,
@@ -32,10 +33,15 @@ class ScheduleAlarmReceiver : BroadcastReceiver() {
         val app = context.applicationContext as LockApplication
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                // Hard ceiling: whatever happens inside, hand control back to Android
-                // well before the broadcast ANR limit.
                 withTimeoutOrNull(RECEIVER_TIMEOUT_MS) {
-                    app.scheduleManager.evaluateAndRearm()
+                    when (action) {
+                        ACTION_WINDOW_BOUNDARY -> app.scheduleManager.evaluateAndRearm()
+                        ACTION_AUTO_LATCH -> app.autoLatchManager.handleAlarm()
+                        else -> {
+                            app.scheduleManager.evaluateAndRearm()
+                            app.autoLatchManager.rearm()
+                        }
+                    }
                 }
             } finally {
                 pendingResult.finish()
@@ -45,6 +51,7 @@ class ScheduleAlarmReceiver : BroadcastReceiver() {
 
     companion object {
         const val ACTION_WINDOW_BOUNDARY = "com.nathanb.lock.action.SCHEDULE_WINDOW_BOUNDARY"
+        const val ACTION_AUTO_LATCH = "com.tomcoley.latch.action.AUTO_LATCH"
         private const val RECEIVER_TIMEOUT_MS = 8_000L
     }
 }
