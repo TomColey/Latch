@@ -18,12 +18,12 @@ import com.nathanb.lock.data.model.LatchAction
 import com.nathanb.lock.data.model.LatchDevice
 import com.nathanb.lock.data.model.Mode
 import com.nathanb.lock.data.model.ModeLatchLink
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -35,12 +35,6 @@ import kotlinx.coroutines.launch
 
 private val Context.latchDataStore by preferencesDataStore(name = "latch_prefs")
 
-/**
- * Repository for Latch's new domain model.
- *
- * Kept separate from the inherited LockRepository while the app is transitioned in small,
- * testable steps. Active Mode state now drives allow-list enforcement; NFC routing follows later.
- */
 class LatchRepository(
     private val context: Context? = null,
     private val modeDao: ModeDao,
@@ -64,6 +58,9 @@ class LatchRepository(
     val modeLatchLinks: Flow<List<ModeLatchLink>> = modeLatchDao.getAll()
     val autoLatchSchedules: Flow<List<AutoLatchSchedule>> = autoLatchScheduleDao.getAll()
 
+    /** Installed by LockApplication so schedule edits immediately re-arm the platform alarm. */
+    var onAutoLatchSchedulesChanged: suspend () -> Unit = {}
+
     val activeModeState: StateFlow<ActiveModeState> = dataStore.data
         .map { preferences ->
             ActiveModeState(
@@ -74,13 +71,11 @@ class LatchRepository(
         .distinctUntilChanged()
         .stateIn(scope, SharingStarted.Eagerly, ActiveModeState())
 
-    /** The single Mode currently enforced, or null while the phone is unlatched. */
     val activeMode: StateFlow<Mode?> = combine(activeModeState, modes) { state, allModes ->
         allModes.firstOrNull { it.id == state.activeModeId }
     }.stateIn(scope, SharingStarted.Eagerly, null)
 
     init {
-        // The maximum duration is a safety release, including after process restart.
         scope.launch {
             combine(activeModeState, activeMode) { state, mode -> state to mode }
                 .collectLatest { (state, mode) ->
@@ -95,7 +90,6 @@ class LatchRepository(
 
     suspend fun getMode(id: Long): Mode? = modeDao.getById(id)
 
-    /** Activates [modeId], replacing any currently active Mode. */
     suspend fun latch(modeId: Long): Boolean {
         if (modeDao.getById(modeId) == null) return false
         dataStore.edit { preferences ->
@@ -121,17 +115,14 @@ class LatchRepository(
         }
     }
 
-    suspend fun createMode(
-        name: String,
-        allowedPackages: List<String>,
-        maxLatchDurationMs: Long,
-    ): Long = modeDao.insert(
-        Mode(
-            name = name,
-            allowedPackages = allowedPackages.distinct(),
-            maxLatchDurationMs = maxLatchDurationMs,
+    suspend fun createMode(name: String, allowedPackages: List<String>, maxLatchDurationMs: Long): Long =
+        modeDao.insert(
+            Mode(
+                name = name,
+                allowedPackages = allowedPackages.distinct(),
+                maxLatchDurationMs = maxLatchDurationMs,
+            )
         )
-    )
 
     suspend fun updateMode(mode: Mode) {
         modeDao.update(mode.copy(allowedPackages = mode.allowedPackages.distinct()))
@@ -140,6 +131,7 @@ class LatchRepository(
     suspend fun deleteMode(mode: Mode) {
         if (activeModeState.value.activeModeId == mode.id) unlatch()
         modeDao.delete(mode)
+        onAutoLatchSchedulesChanged()
     }
 
     suspend fun getLatchDevice(uid: String): LatchDevice? = latchDeviceDao.getByUid(uid)
@@ -156,38 +148,22 @@ class LatchRepository(
         latchDeviceDao.delete(uid)
     }
 
-    suspend fun getLatchActionsForMode(modeId: Long): List<ModeLatchLink> =
-        modeLatchDao.getByMode(modeId)
-
-    suspend fun getActionsForLatch(uid: String): List<ModeLatchLink> =
-        modeLatchDao.getByLatch(uid)
+    suspend fun getLatchActionsForMode(modeId: Long): List<ModeLatchLink> = modeLatchDao.getByMode(modeId)
+    suspend fun getActionsForLatch(uid: String): List<ModeLatchLink> = modeLatchDao.getByLatch(uid)
 
     suspend fun setLatchAction(modeId: Long, latchUid: String, action: LatchAction) {
-        modeLatchDao.insert(
-            ModeLatchLink(
-                modeId = modeId,
-                latchUid = latchUid,
-                action = action.value,
-            )
-        )
+        modeLatchDao.insert(ModeLatchLink(modeId = modeId, latchUid = latchUid, action = action.value))
     }
 
     suspend fun removeLatchAction(modeId: Long, latchUid: String, action: LatchAction) {
         modeLatchDao.delete(modeId, latchUid, action.value)
     }
 
-    /** Replace all physical Latch assignments for a Mode as one transaction. */
     suspend fun replaceLatchActions(modeId: Long, links: List<Pair<String, LatchAction>>) {
         database.withTransaction {
             modeLatchDao.deleteByMode(modeId)
             links.distinct().forEach { (uid, action) ->
-                modeLatchDao.insert(
-                    ModeLatchLink(
-                        modeId = modeId,
-                        latchUid = uid,
-                        action = action.value,
-                    )
-                )
+                modeLatchDao.insert(ModeLatchLink(modeId = modeId, latchUid = uid, action = action.value))
             }
         }
     }
@@ -195,29 +171,58 @@ class LatchRepository(
     suspend fun getAutoLatchSchedules(modeId: Long): List<AutoLatchSchedule> =
         autoLatchScheduleDao.getByMode(modeId)
 
+    /** v1 keeps one simple recurring Auto-latch configuration per Mode. */
+    suspend fun setAutoLatchSchedule(
+        modeId: Long,
+        enabled: Boolean,
+        daysOfWeek: Int,
+        startMinuteOfDay: Int,
+    ) {
+        require(startMinuteOfDay in 0..1439)
+        database.withTransaction {
+            autoLatchScheduleDao.deleteByMode(modeId)
+            autoLatchScheduleDao.insert(
+                AutoLatchSchedule(
+                    modeId = modeId,
+                    daysOfWeek = daysOfWeek,
+                    startMinuteOfDay = startMinuteOfDay,
+                    enabled = enabled,
+                )
+            )
+        }
+        onAutoLatchSchedulesChanged()
+    }
+
     suspend fun addAutoLatchSchedule(
         modeId: Long,
         daysOfWeek: Int,
         startMinuteOfDay: Int,
         enabled: Boolean = true,
-    ): Long = autoLatchScheduleDao.insert(
-        AutoLatchSchedule(
-            modeId = modeId,
-            daysOfWeek = daysOfWeek,
-            startMinuteOfDay = startMinuteOfDay,
-            enabled = enabled,
+    ): Long {
+        val id = autoLatchScheduleDao.insert(
+            AutoLatchSchedule(
+                modeId = modeId,
+                daysOfWeek = daysOfWeek,
+                startMinuteOfDay = startMinuteOfDay,
+                enabled = enabled,
+            )
         )
-    )
+        onAutoLatchSchedulesChanged()
+        return id
+    }
 
     suspend fun updateAutoLatchSchedule(schedule: AutoLatchSchedule) {
         autoLatchScheduleDao.update(schedule)
+        onAutoLatchSchedulesChanged()
     }
 
     suspend fun setAutoLatchEnabled(id: Long, enabled: Boolean) {
         autoLatchScheduleDao.setEnabled(id, enabled)
+        onAutoLatchSchedulesChanged()
     }
 
     suspend fun removeAutoLatchSchedule(id: Long) {
         autoLatchScheduleDao.delete(id)
+        onAutoLatchSchedulesChanged()
     }
 }
