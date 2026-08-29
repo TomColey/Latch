@@ -6,6 +6,10 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import com.nathanb.lock.data.model.AutoLatchSchedule
+import com.nathanb.lock.data.model.LatchDevice
+import com.nathanb.lock.data.model.Mode
+import com.nathanb.lock.data.model.ModeLatchLink
 import com.nathanb.lock.data.model.NfcTag
 import com.nathanb.lock.data.model.Profile
 import com.nathanb.lock.data.model.Schedule
@@ -154,5 +158,102 @@ interface NfcTagDao {
     suspend fun getAllOnce(): List<NfcTag>
 
     @Query("DELETE FROM nfc_tags")
+    suspend fun deleteAll()
+}
+
+// -----------------------------------------------------------------------------
+// Latch DAOs
+// -----------------------------------------------------------------------------
+
+@Dao
+interface ModeDao {
+    @Query("SELECT * FROM modes ORDER BY createdAt ASC")
+    fun getAll(): Flow<List<Mode>>
+
+    @Query("SELECT * FROM modes WHERE id = :id")
+    suspend fun getById(id: Long): Mode?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(mode: Mode): Long
+
+    @Update
+    suspend fun update(mode: Mode)
+
+    @Delete
+    suspend fun delete(mode: Mode)
+
+    @Query("DELETE FROM modes")
+    suspend fun deleteAll()
+}
+
+@Dao
+interface LatchDeviceDao {
+    @Query("SELECT * FROM latch_devices ORDER BY createdAt ASC")
+    fun getAll(): Flow<List<LatchDevice>>
+
+    @Query("SELECT * FROM latch_devices WHERE uid = :uid")
+    suspend fun getByUid(uid: String): LatchDevice?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(device: LatchDevice)
+
+    @Query("UPDATE latch_devices SET name = :name WHERE uid = :uid")
+    suspend fun rename(uid: String, name: String)
+
+    @Query("DELETE FROM latch_devices WHERE uid = :uid")
+    suspend fun delete(uid: String)
+
+    @Query("DELETE FROM latch_devices")
+    suspend fun deleteAll()
+}
+
+@Dao
+interface ModeLatchDao {
+    @Query("SELECT * FROM mode_latches")
+    fun getAll(): Flow<List<ModeLatchLink>>
+
+    @Query("SELECT * FROM mode_latches WHERE modeId = :modeId")
+    suspend fun getByMode(modeId: Long): List<ModeLatchLink>
+
+    @Query("SELECT * FROM mode_latches WHERE latchUid = :latchUid")
+    suspend fun getByLatch(latchUid: String): List<ModeLatchLink>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(link: ModeLatchLink)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(links: List<ModeLatchLink>)
+
+    @Query("DELETE FROM mode_latches WHERE modeId = :modeId")
+    suspend fun deleteByMode(modeId: Long)
+
+    @Query("DELETE FROM mode_latches WHERE modeId = :modeId AND latchUid = :latchUid AND action = :action")
+    suspend fun delete(modeId: Long, latchUid: String, action: String)
+}
+
+@Dao
+interface AutoLatchScheduleDao {
+    @Query("SELECT * FROM auto_latch_schedules ORDER BY createdAt ASC")
+    fun getAll(): Flow<List<AutoLatchSchedule>>
+
+    @Query("SELECT * FROM auto_latch_schedules WHERE id = :id")
+    suspend fun getById(id: Long): AutoLatchSchedule?
+
+    @Query("SELECT * FROM auto_latch_schedules WHERE modeId = :modeId ORDER BY createdAt ASC")
+    suspend fun getByMode(modeId: Long): List<AutoLatchSchedule>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(schedule: AutoLatchSchedule): Long
+
+    @Update
+    suspend fun update(schedule: AutoLatchSchedule)
+
+    @Query("UPDATE auto_latch_schedules SET enabled = :enabled WHERE id = :id")
+    suspend fun setEnabled(id: Long, enabled: Boolean)
+
+    @Query("DELETE FROM auto_latch_schedules WHERE id = :id")
+    suspend fun delete(id: Long)
+
+    @Query("DELETE FROM auto_latch_schedules")
     suspend fun deleteAll()
 }
