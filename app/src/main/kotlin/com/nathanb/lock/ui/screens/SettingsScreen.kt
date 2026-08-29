@@ -1,9 +1,11 @@
 package com.nathanb.lock.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,13 +16,17 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.Nfc
 import androidx.compose.material.icons.outlined.PrivacyTip
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.VerifiedUser
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -31,7 +37,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -98,89 +107,99 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp)
                 .padding(bottom = 110.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Spacer(Modifier.height(16.dp))
-            Text(
-                text = "Settings",
-                fontFamily = SatoshiFamily,
-                fontWeight = FontWeight.Black,
-                fontSize = 28.sp,
-                color = colors.onSurface,
-            )
-            Text(
-                text = "Set up how Latch works on this phone.",
-                fontFamily = SatoshiFamily,
-                fontSize = 14.sp,
-                color = colors.onSurfaceVariant,
-            )
-
-            Spacer(Modifier.height(4.dp))
-            SectionHeader("Latch")
-            SettingsCard {
-                SettingsRow(
-                    icon = Icons.Outlined.Shield,
-                    title = "Modes",
-                    subtitle = if (modes.size == 1) "1 Mode" else "${modes.size} Modes",
-                    onClick = onNavigateToProfiles,
-                )
-                SettingsDivider()
-                SettingsRow(
-                    icon = Icons.Outlined.Nfc,
-                    title = "Physical Latches",
-                    subtitle = if (latchDevices.size == 1) "1 physical Latch" else "${latchDevices.size} physical Latches",
-                    onClick = onNavigateToNfcTags,
-                )
-            }
-
-            SectionHeader("Phone")
-            SettingsCard {
-                SettingsRow(
-                    icon = Icons.Outlined.VerifiedUser,
-                    title = "Permissions",
-                    subtitle = if (permissionsOk) "Ready" else "Action needed",
-                    subtitleColor = if (permissionsOk) colors.primary else colors.error,
-                    onClick = onNavigateToPermissions,
-                )
-                SettingsDivider()
-                SettingsRow(
-                    icon = Icons.Outlined.LightMode,
-                    title = "Appearance",
-                    subtitle = themeLabel,
-                    onClick = { showThemeSheet = true },
-                )
-            }
-
-            SectionHeader("About")
-            SettingsCard {
-                SettingsRow(
-                    icon = Icons.Outlined.PrivacyTip,
-                    title = "Privacy",
-                    subtitle = "Local-first. Modes, Latches and active state stay on this device.",
-                )
-                SettingsDivider()
-                SettingsRow(
-                    icon = Icons.Outlined.Info,
-                    title = "Latch",
-                    subtitle = "Version ${BuildConfig.VERSION_NAME}",
-                )
-            }
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(colors.surfaceContainer, RoundedCornerShape(16.dp))
-                    .padding(16.dp),
-            ) {
+            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                Spacer(Modifier.height(16.dp))
                 Text(
-                    text = "Latch does not need an account or internet connection for its core functionality.",
+                    text = "Settings",
                     fontFamily = SatoshiFamily,
-                    fontSize = 13.sp,
-                    lineHeight = 19.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 28.sp,
+                    color = colors.onSurface,
+                )
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    text = "Set up how Latch works on this phone.",
+                    fontFamily = SatoshiFamily,
+                    fontSize = 14.sp,
                     color = colors.onSurfaceVariant,
                 )
+
+                Spacer(Modifier.height(20.dp))
+                SectionHeader("Your Latch")
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    LatchActionCard(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Outlined.Shield,
+                        title = "Modes",
+                        subtitle = if (modes.size == 1) "1 Mode" else "${modes.size} Modes",
+                        count = modes.size,
+                        onClick = onNavigateToProfiles,
+                    )
+                    LatchActionCard(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Outlined.Nfc,
+                        title = "Physical Latches",
+                        subtitle = if (latchDevices.size == 1) "1 registered" else "${latchDevices.size} registered",
+                        count = latchDevices.size,
+                        onClick = onNavigateToNfcTags,
+                    )
+                }
+
+                Spacer(Modifier.height(18.dp))
+                SectionHeader("Phone")
+                SettingsCard {
+                    SettingsRow(
+                        icon = Icons.Outlined.VerifiedUser,
+                        title = "Permissions",
+                        subtitle = if (permissionsOk) "Everything Latch needs is enabled" else "Action needed",
+                        subtitleColor = if (permissionsOk) colors.primary else colors.error,
+                        onClick = onNavigateToPermissions,
+                    )
+                    SettingsDivider()
+                    SettingsRow(
+                        icon = Icons.Outlined.LightMode,
+                        title = "Appearance",
+                        subtitle = themeLabel,
+                        onClick = { showThemeSheet = true },
+                    )
+                }
+
+                Spacer(Modifier.height(18.dp))
+                SectionHeader("About Latch")
+                SettingsCard {
+                    SettingsRow(
+                        icon = Icons.Outlined.PrivacyTip,
+                        title = "Privacy",
+                        subtitle = "Local-first. Modes, Latches and active state stay on this device.",
+                    )
+                    SettingsDivider()
+                    SettingsRow(
+                        icon = Icons.Outlined.Info,
+                        title = "About",
+                        subtitle = "Latch ${BuildConfig.VERSION_NAME}",
+                    )
+                }
+
+                Spacer(Modifier.height(12.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(colors.surfaceContainer, RoundedCornerShape(16.dp))
+                        .padding(16.dp),
+                ) {
+                    Text(
+                        text = "Latch does not need an account or internet connection for its core functionality.",
+                        fontFamily = SatoshiFamily,
+                        fontSize = 13.sp,
+                        lineHeight = 19.sp,
+                        color = colors.onSurfaceVariant,
+                    )
+                }
             }
         }
     }
@@ -217,6 +236,89 @@ fun SettingsScreen(
                         viewModel.setThemeMode(mode)
                         showThemeSheet = false
                     },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LatchActionCard(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    count: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = LockTheme.colors
+    Card(
+        modifier = modifier.clickable(onClick = onClick),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = colors.cardContainer),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(RoundedCornerShape(13.dp))
+                        .background(colors.primary.copy(alpha = 0.1f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = colors.primary,
+                        modifier = Modifier.size(21.dp),
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(9.dp))
+                        .background(colors.primary.copy(alpha = 0.1f))
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                ) {
+                    Text(
+                        text = count.toString(),
+                        fontFamily = SatoshiFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp,
+                        color = colors.primaryDark,
+                    )
+                }
+            }
+            Text(
+                text = title,
+                fontFamily = SatoshiFamily,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 16.sp,
+                color = colors.onSurface,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = subtitle,
+                    fontFamily = SatoshiFamily,
+                    fontSize = 12.sp,
+                    color = colors.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = colors.onSurfaceVariant.copy(alpha = 0.55f),
+                    modifier = Modifier.size(18.dp),
                 )
             }
         }
