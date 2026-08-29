@@ -25,6 +25,8 @@ import androidx.compose.ui.unit.sp
 import com.nathanb.lock.BuildConfig
 import com.nathanb.lock.LockApplication
 import com.nathanb.lock.R
+import com.nathanb.lock.data.model.LatchAction
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 private val LatchDevOrange = Color(0xFFFF7A00)
@@ -46,8 +48,6 @@ internal fun AnimatedTriangleLogo(
     fillProgress: Float = 0f,
     accentColor: Color? = null,
 ) {
-    // Keep HomeScreen's visual state in sync while the original logo animation is temporarily
-    // absent. The unused parameters remain in the signature to avoid changing existing callers.
     LaunchedEffect(isLocked) {
         onVisualLockedChange(isLocked)
     }
@@ -92,11 +92,25 @@ internal fun AnimatedTriangleLogo(
                         if (isDevTestLatched) {
                             app.latchRepository.unlatch()
                         } else if (activeMode == null) {
-                            val modeId = app.latchRepository.createMode(
+                            // Reuse the existing DEV TEST Mode rather than creating a new row on
+                            // every run. If a legacy paired tag exists, mirror it into the Latch
+                            // model and make it a TOGGLE action for this test Mode.
+                            val existingMode = app.latchRepository.modes.first()
+                                .firstOrNull { it.name == DEV_TEST_MODE_NAME }
+                            val modeId = existingMode?.id ?: app.latchRepository.createMode(
                                 name = DEV_TEST_MODE_NAME,
                                 allowedPackages = emptyList(),
                                 maxLatchDurationMs = DEV_TEST_DURATION_MS,
                             )
+
+                            app.repository.nfcTags.first().firstOrNull()?.let { tag ->
+                                app.latchRepository.addLatchDevice(tag.uid, tag.name)
+                                app.latchRepository.replaceLatchActions(
+                                    modeId = modeId,
+                                    links = listOf(tag.uid to LatchAction.TOGGLE),
+                                )
+                            }
+
                             app.latchRepository.latch(modeId)
                         }
                     }
