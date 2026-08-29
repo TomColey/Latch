@@ -33,9 +33,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -59,22 +56,12 @@ fun ModesListScreen(
     val app = LocalContext.current.applicationContext as LockApplication
     val modes by app.latchRepository.modes.collectAsState(initial = emptyList())
     val schedules by app.latchRepository.autoLatchSchedules.collectAsState(initial = emptyList())
-    var autoLatchModeId by remember { mutableStateOf<Long?>(null) }
-
-    autoLatchModeId?.let { modeId ->
-        AutoLatchScreen(modeId = modeId, onBack = { autoLatchModeId = null })
-        return
-    }
 
     Scaffold(
         containerColor = colors.surface,
         topBar = {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .windowInsetsPadding(WindowInsets.statusBars)
-                    .height(56.dp)
-                    .padding(horizontal = 20.dp),
+                modifier = Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).height(56.dp).padding(horizontal = 20.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
@@ -82,69 +69,39 @@ fun ModesListScreen(
                     Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back", tint = colors.primary)
                 }
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Modes",
-                        fontFamily = SatoshiFamily,
-                        fontWeight = FontWeight.Black,
-                        fontSize = 24.sp,
-                        color = colors.onSurface,
-                        letterSpacing = (-0.5).sp,
-                    )
-                    Text(
-                        text = "Choose what gets through when your phone is latched",
-                        fontFamily = SatoshiFamily,
-                        fontSize = 13.sp,
-                        color = colors.onSurfaceVariant,
-                    )
+                    Text("Modes", fontFamily = SatoshiFamily, fontWeight = FontWeight.Black, fontSize = 24.sp, color = colors.onSurface, letterSpacing = (-0.5).sp)
+                    Text("Choose what gets through when your phone is latched", fontFamily = SatoshiFamily, fontSize = 13.sp, color = colors.onSurfaceVariant)
                 }
                 Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(colors.surfaceContainer)
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(colors.surfaceContainer).padding(horizontal = 10.dp, vertical = 6.dp),
                 ) {
-                    Text(
-                        text = modes.size.toString(),
-                        fontFamily = SatoshiFamily,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 13.sp,
-                        color = colors.onSurfaceVariant,
-                    )
+                    Text(modes.size.toString(), fontFamily = SatoshiFamily, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = colors.onSurfaceVariant)
                 }
             }
         },
     ) { padding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp),
+            modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Spacer(Modifier.height(4.dp))
-
             modes.forEach { mode ->
                 ModeListItem(
                     mode = mode,
                     schedule = schedules.firstOrNull { it.modeId == mode.id },
                     onClick = { onEditMode(mode.id) },
-                    onAutoLatch = { autoLatchModeId = mode.id },
                 )
             }
-
             if (modes.isEmpty()) {
                 Text(
-                    text = "No Modes yet. Create one to decide what you want to let through.",
+                    "No Modes yet. Create one to decide what you want to let through.",
                     fontFamily = SatoshiFamily,
                     fontSize = 13.sp,
                     color = colors.onSurfaceVariant,
                     modifier = Modifier.padding(vertical = 8.dp),
                 )
             }
-
             Spacer(Modifier.height(6.dp))
-
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
@@ -158,14 +115,7 @@ fun ModesListScreen(
                     horizontalArrangement = Arrangement.Center,
                 ) {
                     Icon(Icons.Outlined.Add, contentDescription = null, tint = colors.primaryDark, modifier = Modifier.size(20.dp))
-                    Text(
-                        text = "New Mode",
-                        fontFamily = SatoshiFamily,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 14.sp,
-                        color = colors.primaryDark,
-                        modifier = Modifier.padding(start = 8.dp),
-                    )
+                    Text("New Mode", fontFamily = SatoshiFamily, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = colors.primaryDark, modifier = Modifier.padding(start = 8.dp))
                 }
             }
         }
@@ -173,13 +123,9 @@ fun ModesListScreen(
 }
 
 @Composable
-private fun ModeListItem(
-    mode: Mode,
-    schedule: AutoLatchSchedule?,
-    onClick: () -> Unit,
-    onAutoLatch: () -> Unit,
-) {
+private fun ModeListItem(mode: Mode, schedule: AutoLatchSchedule?, onClick: () -> Unit) {
     val colors = LockTheme.colors
+    val autoLatchOn = schedule?.enabled == true
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -198,34 +144,23 @@ private fun ModeListItem(
             ) {
                 Icon(Icons.Outlined.Shield, contentDescription = null, tint = colors.primaryDark, modifier = Modifier.size(22.dp))
             }
-
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(mode.name, fontFamily = SatoshiFamily, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = colors.onSurface)
                 Text(
-                    text = mode.name,
-                    fontFamily = SatoshiFamily,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 16.sp,
-                    color = colors.onSurface,
-                )
-                Text(
-                    text = "${mode.allowedPackages.size} apps get through · ${formatDuration(mode.maxLatchDurationMs)} max",
+                    "${mode.allowedPackages.size} apps get through · ${formatDuration(mode.maxLatchDurationMs)} max",
                     fontFamily = SatoshiFamily,
                     fontSize = 13.sp,
                     color = colors.onSurfaceVariant,
                 )
-                Text(
-                    text = autoLatchSummary(schedule),
-                    fontFamily = SatoshiFamily,
-                    fontSize = 12.sp,
-                    color = if (schedule?.enabled == true) colors.primaryDark else colors.onSurfaceVariant,
-                )
+                if (autoLatchOn) {
+                    Text(autoLatchSummary(schedule), fontFamily = SatoshiFamily, fontSize = 12.sp, color = colors.primaryDark)
+                }
             }
-
-            IconButton(onClick = onAutoLatch) {
+            if (autoLatchOn) {
                 Icon(
                     imageVector = Icons.Outlined.Schedule,
-                    contentDescription = "Auto-latch",
-                    tint = if (schedule?.enabled == true) colors.primary else colors.onSurfaceVariant,
+                    contentDescription = "Auto-latch enabled",
+                    tint = colors.primary,
                     modifier = Modifier.size(21.dp),
                 )
             }
@@ -240,7 +175,7 @@ private fun ModeListItem(
 }
 
 private fun autoLatchSummary(schedule: AutoLatchSchedule?): String {
-    if (schedule == null || !schedule.enabled) return "Auto-latch off"
+    if (schedule == null || !schedule.enabled) return ""
     val hour = schedule.startMinuteOfDay / 60
     val minute = schedule.startMinuteOfDay % 60
     return "Auto-latch ${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}"
