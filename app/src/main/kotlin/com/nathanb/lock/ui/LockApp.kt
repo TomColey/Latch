@@ -1,12 +1,12 @@
 package com.nathanb.lock.ui
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -15,6 +15,8 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -23,31 +25,30 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
-import androidx.navigation.navArgument
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.ui.unit.dp
+import androidx.navigation.navArgument
 import com.nathanb.lock.ui.components.FloatingNavBar
 import com.nathanb.lock.ui.components.ManualModeBanner
 import com.nathanb.lock.ui.components.ManualModeInfoSheet
 import com.nathanb.lock.ui.screens.AppPickerScreen
-import com.nathanb.lock.ui.screens.ProfileDetailScreen
 import com.nathanb.lock.ui.screens.HomeScreen
 import com.nathanb.lock.ui.screens.NfcTagsScreen
+import com.nathanb.lock.ui.screens.ProfileDetailScreen
 import com.nathanb.lock.ui.screens.SettingsScreen
-import com.nathanb.lock.ui.screens.modes.ModesListScreen
-import com.nathanb.lock.ui.screens.modes.NewModeScreen
-import com.nathanb.lock.ui.screens.schedules.ScheduleEditScreen
-import com.nathanb.lock.ui.screens.schedules.SchedulesListScreen
-import com.nathanb.lock.ui.screens.onboarding.OnboardingScreen
 import com.nathanb.lock.ui.screens.SplashScreen
 import com.nathanb.lock.ui.screens.StatsScreen
+import com.nathanb.lock.ui.screens.latches.LatchesScreen
+import com.nathanb.lock.ui.screens.modes.ModesListScreen
+import com.nathanb.lock.ui.screens.modes.NewModeScreen
+import com.nathanb.lock.ui.screens.onboarding.OnboardingScreen
+import com.nathanb.lock.ui.screens.schedules.ScheduleEditScreen
+import com.nathanb.lock.ui.screens.schedules.SchedulesListScreen
 import com.nathanb.lock.ui.screens.settings.DataScreen
 import com.nathanb.lock.ui.screens.settings.PermissionsScreen
 import com.nathanb.lock.ui.screens.settings.SessionSettingsScreen
@@ -140,13 +141,24 @@ fun LockApp(viewModel: LockViewModel, isNfcLaunch: Boolean = false) {
                             viewModel = viewModel,
                             onNavigateToProfileDetail = { id -> navController.navigate("profile-detail/$id") },
                             onNavigateToProfiles = { navController.navigate("profiles") },
-                            onNavigateToNfcTags = { navController.navigate("nfc-tags") },
+                            onNavigateToNfcTags = { navController.navigate("latches") },
                             onNavigateToPermissions = { navController.navigate("permissions") },
                             onNavigateToData = { navController.navigate("data") },
                             onNavigateToSessionSettings = { navController.navigate("session-settings") },
                             onNavigateToSchedules = { navController.navigate("schedules") },
                         )
                     }
+                }
+
+                composable(
+                    "latches",
+                    enterTransition = { slideInHorizontally(initialOffsetX = { it }) + fadeIn(tween(300)) },
+                    popExitTransition = { slideOutHorizontally(targetOffsetX = { it }) + fadeOut(tween(300)) },
+                ) {
+                    LatchesScreen(
+                        viewModel = viewModel,
+                        onBack = { navController.popBackStack() },
+                    )
                 }
 
                 composable(
