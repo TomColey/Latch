@@ -7,6 +7,7 @@ import com.nathanb.lock.data.database.MIGRATION_1_2
 import com.nathanb.lock.data.database.MIGRATION_2_3
 import com.nathanb.lock.data.database.MIGRATION_3_4
 import com.nathanb.lock.data.database.MIGRATION_4_5
+import com.nathanb.lock.data.database.MIGRATION_5_6
 import com.nathanb.lock.data.repository.LockRepository
 import com.nathanb.lock.schedule.AndroidScheduleEffects
 import com.nathanb.lock.schedule.ScheduleManager
@@ -36,7 +37,13 @@ class LockApplication : Application() {
             LockDatabase::class.java,
             "lock.db",
         )
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+            .addMigrations(
+                MIGRATION_1_2,
+                MIGRATION_2_3,
+                MIGRATION_3_4,
+                MIGRATION_4_5,
+                MIGRATION_5_6,
+            )
             .build()
 
         repository = LockRepository(
@@ -50,7 +57,8 @@ class LockApplication : Application() {
         )
 
         scheduleManager = ScheduleManager(repository, AndroidScheduleEffects(this))
-        // Any session end (NFC, manual, timeout, FGS...) re-evaluates the windows.
+        // Any session end (NFC, manual, timeout, FGS...) re-evaluates the inherited Lock windows.
+        // This remains untouched until the Latch auto-latch engine replaces it in a later phase.
         repository.onSessionEnded = { scheduleManager.evaluateAndRearm() }
         // Startup safety net: covers missed inexact alarms and process death.
         appScope.launch { scheduleManager.evaluateAndRearm() }
