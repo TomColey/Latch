@@ -57,9 +57,13 @@ import com.nathanb.lock.util.PermissionHelper
 @Composable
 fun SettingsScreen(
     viewModel: LockViewModel,
-    onNavigateToModes: () -> Unit,
-    onNavigateToLatches: () -> Unit,
+    onNavigateToProfileDetail: (Long) -> Unit,
+    onNavigateToProfiles: () -> Unit,
+    onNavigateToNfcTags: () -> Unit,
     onNavigateToPermissions: () -> Unit,
+    onNavigateToData: () -> Unit,
+    onNavigateToSessionSettings: () -> Unit = {},
+    onNavigateToSchedules: () -> Unit = {},
 ) {
     val colors = LockTheme.colors
     val context = LocalContext.current
@@ -120,14 +124,14 @@ fun SettingsScreen(
                     icon = Icons.Outlined.Shield,
                     title = "Modes",
                     subtitle = if (modes.size == 1) "1 Mode" else "${modes.size} Modes",
-                    onClick = onNavigateToModes,
+                    onClick = onNavigateToProfiles,
                 )
                 SettingsDivider()
                 SettingsRow(
                     icon = Icons.Outlined.Nfc,
                     title = "Physical Latches",
                     subtitle = if (latchDevices.size == 1) "1 physical Latch" else "${latchDevices.size} physical Latches",
-                    onClick = onNavigateToLatches,
+                    onClick = onNavigateToNfcTags,
                 )
             }
 
