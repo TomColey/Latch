@@ -31,6 +31,7 @@ sealed interface NfcResult {
     data class Stopped(val tagName: String?) : NfcResult
     data class ModeLatched(val modeId: Long, val tagName: String?) : NfcResult
     data class ModeUnlatched(val tagName: String?) : NfcResult
+    data class ModeActivationConflict(val tagName: String?) : NfcResult
     data object ModeActionIgnored : NfcResult
     data object IgnoredNoEscapeActive : NfcResult
     data object UnknownTag : NfcResult
@@ -203,13 +204,25 @@ class NfcManager(
                 }
             }
 
-            val activationLink = links.firstOrNull { link ->
+            val activationLinks = links.filter { link ->
                 val action = LatchAction.fromValue(link.action)
                 action == LatchAction.LATCH || action == LatchAction.TOGGLE
             }
-            return if (activationLink != null && latchRepository.latch(activationLink.modeId)) {
-                if (BuildConfig.DEBUG) Log.d(TAG, "Mode ${activationLink.modeId} latched by ${latchDevice.name}")
-                NfcResult.ModeLatched(activationLink.modeId, latchDevice.name)
+            val activationModeIds = activationLinks.map { it.modeId }.distinct()
+            if (activationModeIds.size > 1) {
+                if (BuildConfig.DEBUG) {
+                    Log.e(
+                        TAG,
+                        "Ambiguous activation blocked for ${latchDevice.name}: Modes $activationModeIds",
+                    )
+                }
+                return NfcResult.ModeActivationConflict(latchDevice.name)
+            }
+
+            val activationModeId = activationModeIds.singleOrNull()
+            return if (activationModeId != null && latchRepository.latch(activationModeId)) {
+                if (BuildConfig.DEBUG) Log.d(TAG, "Mode $activationModeId latched by ${latchDevice.name}")
+                NfcResult.ModeLatched(activationModeId, latchDevice.name)
             } else {
                 if (BuildConfig.DEBUG) Log.d(TAG, "Latch ${latchDevice.name} has no activation action")
                 NfcResult.ModeActionIgnored
