@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
@@ -46,7 +47,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -58,23 +58,19 @@ import kotlinx.coroutines.launch
 private data class DayOption(val label: String, val bit: Int)
 
 private val dayOptions = listOf(
-    DayOption("M", 1 shl 0),
-    DayOption("T", 1 shl 1),
-    DayOption("W", 1 shl 2),
-    DayOption("T", 1 shl 3),
-    DayOption("F", 1 shl 4),
-    DayOption("S", 1 shl 5),
-    DayOption("S", 1 shl 6),
+    DayOption("Mon", 1 shl 0),
+    DayOption("Tue", 1 shl 1),
+    DayOption("Wed", 1 shl 2),
+    DayOption("Thu", 1 shl 3),
+    DayOption("Fri", 1 shl 4),
+    DayOption("Sat", 1 shl 5),
+    DayOption("Sun", 1 shl 6),
 )
 
 @Composable
-fun AutoLatchScreen(
-    modeId: Long,
-    onBack: () -> Unit,
-) {
+fun AutoLatchScreen(modeId: Long, onBack: () -> Unit) {
     val colors = LockTheme.colors
-    val context = LocalContext.current
-    val app = context.applicationContext as LockApplication
+    val app = LocalContext.current.applicationContext as LockApplication
     val scope = rememberCoroutineScope()
     val modes by app.latchRepository.modes.collectAsState(initial = emptyList())
     val schedules by app.latchRepository.autoLatchSchedules.collectAsState(initial = emptyList())
@@ -107,20 +103,12 @@ fun AutoLatchScreen(
         containerColor = colors.surface,
         topBar = {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .windowInsetsPadding(WindowInsets.statusBars)
-                    .height(64.dp)
-                    .padding(horizontal = 12.dp),
+                modifier = Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).height(64.dp).padding(horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 IconButton(onClick = onBack) {
-                    Icon(
-                        Icons.AutoMirrored.Outlined.ArrowBack,
-                        contentDescription = "Back",
-                        tint = colors.primary,
-                    )
+                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back", tint = colors.primary)
                 }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -142,14 +130,10 @@ fun AutoLatchScreen(
         },
         bottomBar = {
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(colors.surface)
-                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                modifier = Modifier.fillMaxWidth().background(colors.surface).padding(horizontal = 20.dp, vertical = 12.dp),
             ) {
                 Button(
                     onClick = {
-                        if (!validTime && enabled) return@Button
                         val startMinute = if (validTime) hour!! * 60 + minute!! else 22 * 60 + 30
                         scope.launch {
                             app.latchRepository.setAutoLatchSchedule(
@@ -178,11 +162,7 @@ fun AutoLatchScreen(
         },
     ) { padding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp),
+            modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Spacer(Modifier.height(4.dp))
@@ -199,17 +179,10 @@ fun AutoLatchScreen(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .background(colors.primary.copy(alpha = 0.12f), CircleShape),
+                        modifier = Modifier.size(44.dp).background(colors.primary.copy(alpha = 0.12f), CircleShape),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Icon(
-                            Icons.Outlined.Schedule,
-                            contentDescription = null,
-                            tint = colors.primaryDark,
-                            modifier = Modifier.size(22.dp),
-                        )
+                        Icon(Icons.Outlined.Schedule, contentDescription = null, tint = colors.primaryDark, modifier = Modifier.size(22.dp))
                     }
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
@@ -251,19 +224,11 @@ fun AutoLatchScreen(
             }
 
             if (enabled) {
-                Text(
-                    text = "Time",
-                    fontFamily = SatoshiFamily,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 17.sp,
-                    color = colors.onSurface,
-                )
+                Text("Time", fontFamily = SatoshiFamily, fontWeight = FontWeight.Bold, fontSize = 17.sp, color = colors.onSurface)
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedTextField(
                         value = hourText,
-                        onValueChange = { value ->
-                            if (value.length <= 2 && value.all(Char::isDigit)) hourText = value
-                        },
+                        onValueChange = { value -> if (value.length <= 2 && value.all(Char::isDigit)) hourText = value },
                         label = { Text("Hour", fontFamily = SatoshiFamily) },
                         placeholder = { Text("22", fontFamily = SatoshiFamily) },
                         singleLine = true,
@@ -273,9 +238,7 @@ fun AutoLatchScreen(
                     )
                     OutlinedTextField(
                         value = minuteText,
-                        onValueChange = { value ->
-                            if (value.length <= 2 && value.all(Char::isDigit)) minuteText = value
-                        },
+                        onValueChange = { value -> if (value.length <= 2 && value.all(Char::isDigit)) minuteText = value },
                         label = { Text("Minute", fontFamily = SatoshiFamily) },
                         placeholder = { Text("30", fontFamily = SatoshiFamily) },
                         singleLine = true,
@@ -293,29 +256,13 @@ fun AutoLatchScreen(
                     )
                 }
 
-                Text(
-                    text = "Days",
-                    fontFamily = SatoshiFamily,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 17.sp,
-                    color = colors.onSurface,
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    dayOptions.forEach { day ->
-                        FilterChip(
-                            selected = (selectedDays and day.bit) != 0,
-                            onClick = {
-                                selectedDays = if ((selectedDays and day.bit) != 0) {
-                                    selectedDays and day.bit.inv()
-                                } else {
-                                    selectedDays or day.bit
-                                }
-                            },
-                            label = { Text(day.label, fontFamily = SatoshiFamily) },
-                        )
+                Text("Days", fontFamily = SatoshiFamily, fontWeight = FontWeight.Bold, fontSize = 17.sp, color = colors.onSurface)
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        dayOptions.take(4).forEach { day -> DayChip(day, selectedDays) { selectedDays = it } }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        dayOptions.drop(4).forEach { day -> DayChip(day, selectedDays) { selectedDays = it } }
                     }
                 }
                 if (selectedDays == 0) {
@@ -327,8 +274,19 @@ fun AutoLatchScreen(
                     )
                 }
             }
-
             Spacer(Modifier.height(16.dp))
         }
     }
+}
+
+@Composable
+private fun DayChip(day: DayOption, selectedDays: Int, onDaysChanged: (Int) -> Unit) {
+    val selected = (selectedDays and day.bit) != 0
+    FilterChip(
+        selected = selected,
+        onClick = {
+            onDaysChanged(if (selected) selectedDays and day.bit.inv() else selectedDays or day.bit)
+        },
+        label = { Text(day.label, fontFamily = SatoshiFamily) },
+    )
 }
