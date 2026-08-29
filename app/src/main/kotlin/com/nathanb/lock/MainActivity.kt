@@ -35,7 +35,6 @@ class MainActivity : ComponentActivity() {
             LockApp(viewModel = viewModel, isNfcLaunch = isNfcLaunch)
         }
 
-        // Handle NFC intent if app was launched via tag (background/manifest case)
         handleNfcIntent(intent)
     }
 
@@ -44,7 +43,6 @@ class MainActivity : ComponentActivity() {
         viewModel.cleanupUninstalledPackages()
         if (BuildConfig.DEBUG) Log.d(TAG, "onResume — enabling reader mode")
         viewModel.nfcManager.enableReaderMode(this) { tag ->
-            // Reader mode callback runs on a binder thread — post to main via lifecycleScope
             lifecycleScope.launch {
                 val result = viewModel.nfcManager.handleTag(tag) ?: return@launch
                 if (BuildConfig.DEBUG) Log.d(TAG, "ReaderMode — result=$result")
@@ -66,10 +64,6 @@ class MainActivity : ComponentActivity() {
         handleNfcIntent(intent)
     }
 
-    /**
-     * Handle NFC intents delivered via the manifest (background/cold start case).
-     * In foreground, Reader Mode handles tags directly via callback.
-     */
     private fun handleNfcIntent(intent: Intent) {
         if (BuildConfig.DEBUG) Log.d(TAG, "handleNfcIntent — action=${intent.action}")
         lifecycleScope.launch {
@@ -94,6 +88,19 @@ class MainActivity : ComponentActivity() {
             is NfcResult.Stopped -> {
                 val tagInfo = result.tagName?.let { " ($it)" } ?: ""
                 Toast.makeText(this, getString(R.string.toast_blocking_off, tagInfo), Toast.LENGTH_SHORT).show()
+            }
+            is NfcResult.ModeLatched -> {
+                val tagInfo = result.tagName?.let { " ($it)" } ?: ""
+                Toast.makeText(this, "Latched$tagInfo", Toast.LENGTH_SHORT).show()
+            }
+            is NfcResult.ModeUnlatched -> {
+                val tagInfo = result.tagName?.let { " ($it)" } ?: ""
+                Toast.makeText(this, "Unlatched$tagInfo", Toast.LENGTH_SHORT).show()
+            }
+            is NfcResult.ModeActionIgnored -> {
+                if (BuildConfig.DEBUG) {
+                    Toast.makeText(this, "This Latch has no action here", Toast.LENGTH_SHORT).show()
+                }
             }
             is NfcResult.IgnoredNoEscapeActive -> {
                 Toast.makeText(this, getString(R.string.toast_no_escape_active), Toast.LENGTH_SHORT).show()
