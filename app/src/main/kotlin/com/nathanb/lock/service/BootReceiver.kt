@@ -32,10 +32,11 @@ class BootReceiver : BroadcastReceiver() {
                     LockForegroundService.start(context)
                 }
 
-                // Alarms don't survive a reboot: re-evaluate windows and re-arm the next boundary.
-                // Timeout ceiling: never hold the broadcast past the ANR limit.
+                // AlarmManager alarms do not survive reboot. Rearm both the inherited Lock window
+                // engine and Latch's one-way Auto-latch engine.
                 kotlinx.coroutines.withTimeoutOrNull(8_000L) {
                     app.scheduleManager.evaluateAndRearm()
+                    app.autoLatchManager.rearm()
                 }
             } finally {
                 pendingResult.finish()
