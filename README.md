@@ -60,6 +60,7 @@ Spotify
 Latch with: Bedroom
 Unlatch with: Kitchen
 Maximum latch time: 8 hours
+Auto-latch: 22:30 Sunday–Thursday
 ```
 
 Tapping the Bedroom Latch activates Bedtime. Tapping it again does not release it. To fully unlatch the phone, you need to physically go to the Kitchen Latch.
@@ -67,6 +68,19 @@ Tapping the Bedroom Latch activates Bedtime. Tapping it again does not release i
 For something like Focus, the same Desk Latch could both activate and release the Mode.
 
 This means Latch can create as much or as little physical friction as the situation needs.
+
+## Auto-latch
+
+A Mode can optionally activate itself at a chosen time on selected days.
+
+Auto-latch is deliberately one-way:
+
+- a schedule can **latch** an unlatched phone
+- a schedule can never **unlatch** the phone
+- if another Mode is already active, the scheduled activation does nothing
+- returning to full access still requires an authorised physical Unlatch or the Mode's maximum latch time safety release
+
+There is no scheduled end time. Auto-latch exists for predictable moments such as bedtime without turning Latch into a conventional timer-based blocker.
 
 ## Safety without an escape button
 
@@ -80,7 +94,7 @@ The maximum is a safety limit, not a productivity timer. Latch is meant to stay 
 
 Latch is intentionally small and focused.
 
-There are no schedules, streaks, productivity scores, focus charts or easy bypass buttons planned for the core experience.
+There are no streaks, productivity scores, focus charts, complex timer systems or easy bypass buttons planned for the core experience. Auto-latch is intentionally limited to one-way scheduled activation.
 
 The normal interaction should remain:
 
@@ -106,6 +120,7 @@ Latch is being redesigned around a different access model and product philosophy
 - Modes define what is allowed through
 - NFC devices can have separate latch and unlatch roles
 - each Mode has a maximum automatic release time
+- Modes can optionally Auto-latch on a one-way schedule
 - the physical interaction is the centre of the experience
 
 The current codebase still contains inherited Lock features and terminology while this refactor is underway.
@@ -135,6 +150,7 @@ No root access, VPN or device-admin tricks are required.
 - Kotlin Coroutines and Flow
 - Android NFC APIs
 - Android Accessibility Service
+- Android AlarmManager
 
 ## Building from source
 
@@ -147,8 +163,6 @@ cd Latch
 ```
 
 NFC features require a physical Android device with NFC hardware.
-
-The inherited project currently uses the Satoshi typeface. These font files are not redistributed in the repository and must be added locally to `app/src/main/res/font/` when building the current codebase.
 
 ## Credits
 
