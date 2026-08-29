@@ -25,6 +25,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -37,6 +38,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.nathanb.lock.LockApplication
+import com.nathanb.lock.data.model.LatchAction
+import com.nathanb.lock.data.model.NfcTag
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -60,11 +63,21 @@ fun NewModeScreen(
     val context = LocalContext.current
     val app = context.applicationContext as LockApplication
     val scope = rememberCoroutineScope()
+    val pairedTags by app.repository.nfcTags.collectAsState(initial = emptyList())
 
     var name by remember { mutableStateOf("") }
     var apps by remember { mutableStateOf<List<ModeApp>>(emptyList()) }
     val selected = remember { mutableStateListOf<String>() }
     var selectedDuration by remember { mutableStateOf(4L * 60L * 60_000L) }
+    var latchTagUid by remember { mutableStateOf<String?>(null) }
+    var unlatchTagUid by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(pairedTags) {
+        if (pairedTags.isNotEmpty()) {
+            if (latchTagUid == null) latchTagUid = pairedTags.first().uid
+            if (unlatchTagUid == null) unlatchTagUid = pairedTags.first().uid
+        }
+    }
 
     LaunchedEffect(Unit) {
         apps = withContext(Dispatchers.IO) {
@@ -185,23 +198,107 @@ fun NewModeScreen(
             }
         }
 
+        Text(
+            text = "Physical Latches",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+        )
+
+        if (pairedTags.isEmpty()) {
+            Text(
+                text = "No paired NFC tags yet. Pair one from the existing NFC Tags screen first.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        } else {
+            LatchTagSelector(
+                label = "Latch with",
+                tags = pairedTags,
+                selectedUid = latchTagUid,
+                onSelected = { latchTagUid = it },
+            )
+            LatchTagSelector(
+                label = "Unlatch with",
+                tags = pairedTags,
+                selectedUid = unlatchTagUid,
+                onSelected = { unlatchTagUid = it },
+            )
+            if (latchTagUid != null && latchTagUid == unlatchTagUid) {
+                Text(
+                    text = "Same Latch selected: this will toggle the Mode on and off.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+
         Spacer(Modifier.padding(top = 8.dp))
 
         Button(
             onClick = {
                 scope.launch {
-                    app.latchRepository.createMode(
+                    val modeId = app.latchRepository.createMode(
                         name = name.trim(),
                         allowedPackages = selected.toList(),
                         maxLatchDurationMs = selectedDuration,
                     )
+
+                    val latchTag = pairedTags.firstOrNull { it.uid == latchTagUid }
+                    val unlatchTag = pairedTags.firstOrNull { it.uid == unlatchTagUid }
+                    listOfNotNull(latchTag, unlatchTag)
+                        .distinctBy { it.uid }
+                        .forEach { tag ->
+                            app.latchRepository.addLatchDevice(tag.uid, tag.name)
+                        }
+
+                    when {
+                        latchTag != null && unlatchTag != null && latchTag.uid == unlatchTag.uid -> {
+                            app.latchRepository.replaceLatchActions(
+                                modeId,
+                                listOf(latchTag.uid to LatchAction.TOGGLE),
+                            )
+                        }
+                        else -> {
+                            val actions = buildList {
+                                latchTag?.let { add(it.uid to LatchAction.LATCH) }
+                                unlatchTag?.let { add(it.uid to LatchAction.UNLATCH) }
+                            }
+                            app.latchRepository.replaceLatchActions(modeId, actions)
+                        }
+                    }
                     onCreated()
                 }
             },
-            enabled = name.isNotBlank(),
+            enabled = name.isNotBlank() && pairedTags.isNotEmpty() && latchTagUid != null && unlatchTagUid != null,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Save Mode")
+        }
+    }
+}
+
+@Composable
+private fun LatchTagSelector(
+    label: String,
+    tags: List<NfcTag>,
+    selectedUid: String?,
+    onSelected: (String) -> Unit,
+) {
+    Text(
+        text = label,
+        style = MaterialTheme.typography.bodyMedium,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier.padding(top = 6.dp),
+    )
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        tags.forEach { tag ->
+            FilterChip(
+                selected = selectedUid == tag.uid,
+                onClick = { onSelected(tag.uid) },
+                label = { Text(tag.name) },
+            )
         }
     }
 }
