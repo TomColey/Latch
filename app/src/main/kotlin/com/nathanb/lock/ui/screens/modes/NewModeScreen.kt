@@ -99,7 +99,7 @@ fun NewModeScreen(
     val scope = rememberCoroutineScope()
     val modes by app.latchRepository.modes.collectAsStateWithLifecycle(initialValue = emptyList())
     val modeLatchLinks by app.latchRepository.modeLatchLinks.collectAsStateWithLifecycle(initialValue = emptyList())
-    val nfcTags by viewModel.nfcTags.collectAsStateWithLifecycle()
+    val latchDevices by app.latchRepository.latchDevices.collectAsStateWithLifecycle(initialValue = emptyList())
     val installedApps by viewModel.installedApps.collectAsStateWithLifecycle()
     val iconCache by viewModel.appIconCache.collectAsStateWithLifecycle()
     val existingMode = modeId?.let { id -> modes.firstOrNull { it.id == id } }
@@ -121,9 +121,7 @@ fun NewModeScreen(
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var pendingConflict by remember { mutableStateOf<LatchConflict?>(null) }
 
-    LaunchedEffect(Unit) {
-        viewModel.ensureInstalledAppsLoaded()
-    }
+    LaunchedEffect(Unit) { viewModel.ensureInstalledAppsLoaded() }
 
     LaunchedEffect(existingMode, modeId) {
         if (initialized) return@LaunchedEffect
@@ -131,8 +129,7 @@ fun NewModeScreen(
         name = mode.name
         selectedDuration = mode.maxLatchDurationMs
         mode.allowedPackages.forEach { selectedApps[it] = true }
-        val links = app.latchRepository.getLatchActionsForMode(mode.id)
-        links.forEach { link ->
+        app.latchRepository.getLatchActionsForMode(mode.id).forEach { link ->
             when (LatchAction.fromValue(link.action)) {
                 LatchAction.TOGGLE -> {
                     latchUid = link.latchUid
@@ -164,7 +161,7 @@ fun NewModeScreen(
         return otherModeId?.let { id -> modes.firstOrNull { it.id == id } }
     }
 
-    fun currentDraft(): ModeEditorDraft = ModeEditorDraft(
+    fun currentDraft() = ModeEditorDraft(
         editorModeId = modeId,
         name = name,
         allowedPackages = selectedApps.filterValues { it }.keys.toSet(),
@@ -181,6 +178,8 @@ fun NewModeScreen(
 
     fun saveMode() {
         val duration = selectedDuration ?: return
+        val startUid = latchUid ?: return
+        val releaseUid = unlatchUid ?: return
         scope.launch {
             val savedModeId = if (existingMode == null) {
                 app.latchRepository.createMode(
@@ -199,21 +198,13 @@ fun NewModeScreen(
                 existingMode.id
             }
 
-            val selectedUids = listOfNotNull(latchUid, unlatchUid).distinct()
-            selectedUids.forEach { uid ->
-                val tag = nfcTags.firstOrNull { it.uid == uid }
-                if (tag != null && app.latchRepository.getLatchDevice(uid) == null) {
-                    app.latchRepository.addLatchDevice(uid, tag.name)
-                }
-            }
-
-            val links = when {
-                latchUid != null && latchUid == unlatchUid ->
-                    listOf(latchUid!! to LatchAction.TOGGLE)
-                else -> buildList {
-                    latchUid?.let { add(it to LatchAction.LATCH) }
-                    unlatchUid?.let { add(it to LatchAction.UNLATCH) }
-                }
+            val links = if (startUid == releaseUid) {
+                listOf(startUid to LatchAction.TOGGLE)
+            } else {
+                listOf(
+                    startUid to LatchAction.LATCH,
+                    releaseUid to LatchAction.UNLATCH,
+                )
             }
             app.latchRepository.replaceLatchActions(savedModeId, links)
             ModeEditorDraftStore.clear(modeId)
@@ -239,16 +230,8 @@ fun NewModeScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                IconButton(
-                    onClick = {
-                        if (step > 0) step-- else leaveEditor()
-                    },
-                ) {
-                    Icon(
-                        Icons.AutoMirrored.Outlined.ArrowBack,
-                        contentDescription = "Back",
-                        tint = colors.primary,
-                    )
+                IconButton(onClick = { if (step > 0) step-- else leaveEditor() }) {
+                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back", tint = colors.primary)
                 }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -268,11 +251,7 @@ fun NewModeScreen(
                 }
                 if (isEditing && existingMode != null) {
                     IconButton(onClick = { showDeleteConfirm = true }) {
-                        Icon(
-                            Icons.Outlined.DeleteOutline,
-                            contentDescription = "Delete Mode",
-                            tint = colors.lockedPrimary,
-                        )
+                        Icon(Icons.Outlined.DeleteOutline, contentDescription = "Delete Mode", tint = colors.lockedPrimary)
                     }
                 }
             }
@@ -295,17 +274,13 @@ fun NewModeScreen(
                         Text("Back", fontFamily = SatoshiFamily, fontWeight = FontWeight.SemiBold)
                     }
                 }
-
                 val canContinue = when (step) {
                     0 -> name.isNotBlank() && initialized
-                    1 -> latchUid != null && unlatchUid != null &&
-                        latchUid?.let { activationConflictFor(it) } == null
+                    1 -> latchUid != null && unlatchUid != null && latchUid?.let { activationConflictFor(it) } == null
                     else -> selectedDuration != null
                 }
                 Button(
-                    onClick = {
-                        if (step < 2) step++ else saveMode()
-                    },
+                    onClick = { if (step < 2) step++ else saveMode() },
                     enabled = canContinue,
                     modifier = Modifier.weight(1f).height(54.dp),
                     shape = RoundedCornerShape(16.dp),
@@ -323,211 +298,163 @@ fun NewModeScreen(
         },
     ) { padding ->
         when (step) {
-            0 -> {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(3),
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding)
-                        .imePadding()
-                        .padding(horizontal = 20.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    item(span = { GridItemSpan(maxLineSpan) }) { Spacer(Modifier.height(4.dp)) }
-                    item(span = { GridItemSpan(maxLineSpan) }) {
-                        OutlinedTextField(
-                            value = name,
-                            onValueChange = { name = it },
-                            label = { Text("Mode name", fontFamily = SatoshiFamily) },
-                            placeholder = { Text("Bedtime, Focus, Family Time…", fontFamily = SatoshiFamily) },
-                            singleLine = true,
-                            shape = RoundedCornerShape(14.dp),
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
-                    item(span = { GridItemSpan(maxLineSpan) }) {
-                        SectionHeading(
-                            title = "What do you want to let through?",
-                            subtitle = "$selectedCount selected · everything else is blocked",
-                        )
-                    }
-                    item(span = { GridItemSpan(maxLineSpan) }) {
-                        AppSearchBar(query = searchQuery, onQueryChange = { searchQuery = it })
-                    }
-                    items(filteredApps, key = { it.packageName }) { item ->
-                        viewModel.getAppIcon(item.packageName)
-                        val selected = selectedApps[item.packageName] == true
-                        AppCard(
-                            app = item,
-                            isSelected = selected,
-                            icon = iconCache[item.packageName],
-                            onToggle = { selectedApps[item.packageName] = !selected },
-                        )
-                    }
-                    item(span = { GridItemSpan(maxLineSpan) }) { Spacer(Modifier.height(16.dp)) }
+            0 -> LazyVerticalGrid(
+                columns = GridCells.Fixed(3),
+                modifier = Modifier.fillMaxSize().padding(padding).imePadding().padding(horizontal = 20.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                item(span = { GridItemSpan(maxLineSpan) }) { Spacer(Modifier.height(4.dp)) }
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text("Mode name", fontFamily = SatoshiFamily) },
+                        placeholder = { Text("Bedtime, Focus, Family Time…", fontFamily = SatoshiFamily) },
+                        singleLine = true,
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    SectionHeading("What do you want to let through?", "$selectedCount selected · everything else is blocked")
+                }
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    AppSearchBar(query = searchQuery, onQueryChange = { searchQuery = it })
+                }
+                items(filteredApps, key = { it.packageName }) { item ->
+                    viewModel.getAppIcon(item.packageName)
+                    val selected = selectedApps[item.packageName] == true
+                    AppCard(
+                        app = item,
+                        isSelected = selected,
+                        icon = iconCache[item.packageName],
+                        onToggle = { selectedApps[item.packageName] = !selected },
+                    )
+                }
+                item(span = { GridItemSpan(maxLineSpan) }) { Spacer(Modifier.height(16.dp)) }
             }
 
-            1 -> {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding)
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 20.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
-                ) {
-                    Spacer(Modifier.height(4.dp))
-                    SectionHeading(
-                        title = "Choose your physical Latches",
-                        subtitle = "A Latch can release many Modes, but it can only start one.",
-                    )
-
-                    LatchChoiceCard(
-                        title = "Latch with",
-                        subtitle = "Scan this Latch to start the Mode when your phone is open.",
-                        selectedUid = latchUid,
-                        tags = nfcTags.map { it.uid to it.name },
-                        activationModeName = { uid -> activationConflictFor(uid)?.name },
-                        onSelect = { uid, tagName ->
-                            val conflict = activationConflictFor(uid)
-                            if (conflict != null) {
-                                pendingConflict = LatchConflict(uid, tagName, conflict)
-                            } else {
-                                latchUid = uid
-                            }
-                        },
-                    )
-
-                    LatchChoiceCard(
-                        title = "Unlatch with",
-                        subtitle = "Scan this Latch to return to full access while this Mode is active.",
-                        selectedUid = unlatchUid,
-                        tags = nfcTags.map { it.uid to it.name },
-                        activationModeName = { null },
-                        onSelect = { uid, _ -> unlatchUid = uid },
-                    )
-
-                    if (nfcTags.isEmpty()) {
-                        InfoCard(
-                            iconText = "No physical Latches are paired yet. Pair one before creating a Mode.",
-                        )
+            1 -> Column(
+                modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Spacer(Modifier.height(4.dp))
+                SectionHeading("Choose your physical Latches", "A Latch can release many Modes, but it can only start one.")
+                LatchChoiceCard(
+                    title = "Latch with",
+                    subtitle = "Scan this Latch to start the Mode when your phone is open.",
+                    selectedUid = latchUid,
+                    latches = latchDevices.map { it.uid to it.name },
+                    activationModeName = { uid -> activationConflictFor(uid)?.name },
+                    onSelect = { uid, latchName ->
+                        val conflict = activationConflictFor(uid)
+                        if (conflict != null) pendingConflict = LatchConflict(uid, latchName, conflict)
+                        else latchUid = uid
+                    },
+                )
+                LatchChoiceCard(
+                    title = "Unlatch with",
+                    subtitle = "Scan this Latch to return to full access while this Mode is active.",
+                    selectedUid = unlatchUid,
+                    latches = latchDevices.map { it.uid to it.name },
+                    activationModeName = { null },
+                    onSelect = { uid, _ -> unlatchUid = uid },
+                )
+                InfoCard(
+                    if (latchDevices.isEmpty()) {
+                        "No physical Latches have been added yet. Add one from Settings before creating a Mode."
                     } else {
-                        InfoCard(
-                            iconText = "Using the same physical Latch for both actions makes it a toggle. Using different Latches lets you build physical friction into the Mode.",
-                        )
+                        "Using the same physical Latch for both actions makes it a toggle. Using different Latches lets you build physical friction into the Mode."
                     }
-                    Spacer(Modifier.height(16.dp))
-                }
+                )
+                Spacer(Modifier.height(16.dp))
             }
 
-            else -> {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding)
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 20.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
+            else -> Column(
+                modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Spacer(Modifier.height(4.dp))
+                SectionHeading("Maximum latch time", "Choose the latest point at which Latch must release automatically.")
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = colors.cardContainer),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
                 ) {
-                    Spacer(Modifier.height(4.dp))
-                    SectionHeading(
-                        title = "Maximum latch time",
-                        subtitle = "Choose the latest point at which Latch must release automatically.",
-                    )
-
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = colors.cardContainer),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.Top,
                     ) {
-                        Row(
-                            modifier = Modifier.padding(16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalAlignment = Alignment.Top,
+                        Box(
+                            modifier = Modifier.size(42.dp).background(colors.primary.copy(alpha = 0.12f), CircleShape),
+                            contentAlignment = Alignment.Center,
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(42.dp)
-                                    .background(colors.primary.copy(alpha = 0.12f), CircleShape),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Icon(
-                                    Icons.Outlined.Timer,
-                                    contentDescription = null,
-                                    tint = colors.primaryDark,
-                                    modifier = Modifier.size(22.dp),
-                                )
-                            }
-                            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                                Text(
-                                    text = "Why does Latch need a maximum?",
-                                    fontFamily = SatoshiFamily,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 15.sp,
-                                    color = colors.onSurface,
-                                )
-                                Text(
-                                    text = "This is a safety release, not a session timer. If your physical Latch is lost, damaged or unavailable, full access will return automatically after this time. Normally you unlatch earlier by scanning your authorised Unlatch.",
-                                    fontFamily = SatoshiFamily,
-                                    fontSize = 13.sp,
-                                    lineHeight = 19.sp,
-                                    color = colors.onSurfaceVariant,
-                                )
-                            }
+                            Icon(Icons.Outlined.Timer, contentDescription = null, tint = colors.primaryDark, modifier = Modifier.size(22.dp))
                         }
-                    }
-
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = colors.cardContainer),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
                             Text(
-                                text = "Safety release after",
+                                text = "Why does Latch need a maximum?",
                                 fontFamily = SatoshiFamily,
-                                fontWeight = FontWeight.SemiBold,
+                                fontWeight = FontWeight.Bold,
                                 fontSize = 15.sp,
                                 color = colors.onSurface,
                             )
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                durationOptions.take(3).forEach { (value, label) ->
-                                    FilterChip(
-                                        selected = selectedDuration == value,
-                                        onClick = { selectedDuration = value },
-                                        label = { Text(label, fontFamily = SatoshiFamily) },
-                                    )
-                                }
+                            Text(
+                                text = "This is a safety release, not a session timer. If your physical Latch is lost, damaged or unavailable, full access will return automatically after this time. Normally you unlatch earlier by scanning your authorised Unlatch.",
+                                fontFamily = SatoshiFamily,
+                                fontSize = 13.sp,
+                                lineHeight = 19.sp,
+                                color = colors.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = colors.cardContainer),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                ) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(
+                            text = "Safety release after",
+                            fontFamily = SatoshiFamily,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 15.sp,
+                            color = colors.onSurface,
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            durationOptions.take(3).forEach { (value, label) ->
+                                FilterChip(
+                                    selected = selectedDuration == value,
+                                    onClick = { selectedDuration = value },
+                                    label = { Text(label, fontFamily = SatoshiFamily) },
+                                )
                             }
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                durationOptions.drop(3).forEach { (value, label) ->
-                                    FilterChip(
-                                        selected = selectedDuration == value,
-                                        onClick = { selectedDuration = value },
-                                        label = { Text(label, fontFamily = SatoshiFamily) },
-                                    )
-                                }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            durationOptions.drop(3).forEach { (value, label) ->
+                                FilterChip(
+                                    selected = selectedDuration == value,
+                                    onClick = { selectedDuration = value },
+                                    label = { Text(label, fontFamily = SatoshiFamily) },
+                                )
                             }
                         }
                     }
-
-                    if (selectedDuration == null) {
-                        Text(
-                            text = "Choose a maximum latch time to finish this Mode.",
-                            fontFamily = SatoshiFamily,
-                            fontSize = 13.sp,
-                            color = colors.onSurfaceVariant,
-                        )
-                    }
-                    Spacer(Modifier.height(16.dp))
                 }
+                if (selectedDuration == null) {
+                    Text(
+                        text = "Choose a maximum latch time to finish this Mode.",
+                        fontFamily = SatoshiFamily,
+                        fontSize = 13.sp,
+                        color = colors.onSurfaceVariant,
+                    )
+                }
+                Spacer(Modifier.height(16.dp))
             }
         }
     }
@@ -625,7 +552,7 @@ private fun LatchChoiceCard(
     title: String,
     subtitle: String,
     selectedUid: String?,
-    tags: List<Pair<String, String>>,
+    latches: List<Pair<String, String>>,
     activationModeName: (String) -> String?,
     onSelect: (String, String) -> Unit,
 ) {
@@ -637,16 +564,8 @@ private fun LatchChoiceCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(
-                verticalAlignment = Alignment.Top,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Icon(
-                    Icons.Outlined.Nfc,
-                    contentDescription = null,
-                    tint = colors.primary,
-                    modifier = Modifier.size(20.dp),
-                )
+            Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Icon(Icons.Outlined.Nfc, contentDescription = null, tint = colors.primary, modifier = Modifier.size(20.dp))
                 Column {
                     Text(
                         text = title,
@@ -663,33 +582,29 @@ private fun LatchChoiceCard(
                     )
                 }
             }
-
-            if (tags.isEmpty()) {
+            if (latches.isEmpty()) {
                 Text(
-                    text = "No physical Latches paired yet",
+                    text = "No physical Latches added yet",
                     fontFamily = SatoshiFamily,
                     fontSize = 13.sp,
                     color = colors.onSurfaceVariant,
                 )
             } else {
-                tags.forEach { (uid, tagName) ->
+                latches.forEach { (uid, latchName) ->
                     val conflictModeName = activationModeName(uid)
                     val selected = selectedUid == uid
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onSelect(uid, tagName) }
-                            .padding(vertical = 5.dp),
+                        modifier = Modifier.fillMaxWidth().clickable { onSelect(uid, latchName) }.padding(vertical = 5.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         RadioButton(
                             selected = selected,
-                            onClick = { onSelect(uid, tagName) },
+                            onClick = { onSelect(uid, latchName) },
                             colors = RadioButtonDefaults.colors(selectedColor = colors.primary),
                         )
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = tagName,
+                                text = latchName,
                                 fontFamily = SatoshiFamily,
                                 fontWeight = FontWeight.Medium,
                                 fontSize = 14.sp,
@@ -717,19 +632,11 @@ private fun LatchChoiceCard(
 private fun InfoCard(iconText: String) {
     val colors = LockTheme.colors
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(colors.surfaceContainer, RoundedCornerShape(16.dp))
-            .padding(16.dp),
+        modifier = Modifier.fillMaxWidth().background(colors.surfaceContainer, RoundedCornerShape(16.dp)).padding(16.dp),
         verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Icon(
-            Icons.Outlined.Info,
-            contentDescription = null,
-            tint = colors.onSurfaceVariant,
-            modifier = Modifier.size(20.dp),
-        )
+        Icon(Icons.Outlined.Info, contentDescription = null, tint = colors.onSurfaceVariant, modifier = Modifier.size(20.dp))
         Text(
             text = iconText,
             fontFamily = SatoshiFamily,
