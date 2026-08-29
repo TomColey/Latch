@@ -32,7 +32,10 @@ sealed interface NfcResult {
     data class ModeLatched(val modeId: Long, val tagName: String?) : NfcResult
     data class ModeUnlatched(val tagName: String?) : NfcResult
     data class ModeActivationConflict(val tagName: String?) : NfcResult
-    data object ModeActionIgnored : NfcResult
+    data class ModeActionIgnored(
+        val activeModeName: String? = null,
+        val requiredLatchNames: List<String> = emptyList(),
+    ) : NfcResult
     data object IgnoredNoEscapeActive : NfcResult
     data object UnknownTag : NfcResult
     data class Error(@StringRes val messageRes: Int) : NfcResult
@@ -199,8 +202,25 @@ class NfcManager(
                     if (BuildConfig.DEBUG) Log.d(TAG, "Mode $activeModeId unlatched by ${latchDevice.name}")
                     NfcResult.ModeUnlatched(latchDevice.name)
                 } else {
-                    if (BuildConfig.DEBUG) Log.d(TAG, "Latch ${latchDevice.name} has no release action for Mode $activeModeId")
-                    NfcResult.ModeActionIgnored
+                    val activeModeName = latchRepository.getMode(activeModeId)?.name
+                    val releaseLinks = latchRepository.getLatchActionsForMode(activeModeId)
+                        .filter { link ->
+                            val action = LatchAction.fromValue(link.action)
+                            action == LatchAction.UNLATCH || action == LatchAction.TOGGLE
+                        }
+                    val requiredLatchNames = releaseLinks
+                        .mapNotNull { link -> latchRepository.getLatchDevice(link.latchUid)?.name }
+                        .distinct()
+                    if (BuildConfig.DEBUG) {
+                        Log.d(
+                            TAG,
+                            "Latch ${latchDevice.name} cannot release Mode $activeModeId; required=$requiredLatchNames",
+                        )
+                    }
+                    NfcResult.ModeActionIgnored(
+                        activeModeName = activeModeName,
+                        requiredLatchNames = requiredLatchNames,
+                    )
                 }
             }
 
@@ -225,7 +245,7 @@ class NfcManager(
                 NfcResult.ModeLatched(activationModeId, latchDevice.name)
             } else {
                 if (BuildConfig.DEBUG) Log.d(TAG, "Latch ${latchDevice.name} has no activation action")
-                NfcResult.ModeActionIgnored
+                NfcResult.ModeActionIgnored()
             }
         }
 
