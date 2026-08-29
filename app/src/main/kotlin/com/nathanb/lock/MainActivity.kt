@@ -97,6 +97,14 @@ class MainActivity : ComponentActivity() {
                 val tagInfo = result.tagName?.let { " ($it)" } ?: ""
                 Toast.makeText(this, "Unlatched$tagInfo", Toast.LENGTH_SHORT).show()
             }
+            is NfcResult.ModeActivationConflict -> {
+                val tagInfo = result.tagName?.let { " ($it)" } ?: ""
+                Toast.makeText(
+                    this,
+                    "Latch assignment conflict$tagInfo — edit Modes",
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
             is NfcResult.ModeActionIgnored -> {
                 if (BuildConfig.DEBUG) {
                     Toast.makeText(this, "This Latch has no action here", Toast.LENGTH_SHORT).show()
