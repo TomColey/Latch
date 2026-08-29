@@ -11,7 +11,9 @@ import com.nathanb.lock.data.database.MIGRATION_5_6
 import com.nathanb.lock.data.repository.LatchRepository
 import com.nathanb.lock.data.repository.LatchRuntime
 import com.nathanb.lock.data.repository.LockRepository
+import com.nathanb.lock.schedule.AndroidAutoLatchEffects
 import com.nathanb.lock.schedule.AndroidScheduleEffects
+import com.nathanb.lock.schedule.AutoLatchManager
 import com.nathanb.lock.schedule.ScheduleManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -19,19 +21,15 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 class LockApplication : Application() {
-
     lateinit var database: LockDatabase
         private set
-
-    /** Inherited Lock behaviour, retained during the staged Latch migration. */
     lateinit var repository: LockRepository
         private set
-
-    /** New Latch domain model: Modes, physical Latches and one-way Auto-latch schedules. */
     lateinit var latchRepository: LatchRepository
         private set
-
     lateinit var scheduleManager: ScheduleManager
+        private set
+    lateinit var autoLatchManager: AutoLatchManager
         private set
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -39,11 +37,7 @@ class LockApplication : Application() {
     override fun onCreate() {
         super.onCreate()
 
-        database = Room.databaseBuilder(
-            this,
-            LockDatabase::class.java,
-            "lock.db",
-        )
+        database = Room.databaseBuilder(this, LockDatabase::class.java, "lock.db")
             .addMigrations(
                 MIGRATION_1_2,
                 MIGRATION_2_3,
@@ -74,10 +68,14 @@ class LockApplication : Application() {
         LatchRuntime.install(latchRepository)
 
         scheduleManager = ScheduleManager(repository, AndroidScheduleEffects(this))
-        // Any session end (NFC, manual, timeout, FGS...) re-evaluates the inherited Lock windows.
-        // This remains untouched until the Latch auto-latch engine replaces it in a later phase.
+        autoLatchManager = AutoLatchManager(latchRepository, AndroidAutoLatchEffects(this))
+
         repository.onSessionEnded = { scheduleManager.evaluateAndRearm() }
-        // Startup safety net: covers missed inexact alarms and process death.
-        appScope.launch { scheduleManager.evaluateAndRearm() }
+        latchRepository.onAutoLatchSchedulesChanged = { autoLatchManager.rearm() }
+
+        appScope.launch {
+            scheduleManager.evaluateAndRearm()
+            autoLatchManager.rearm()
+        }
     }
 }
