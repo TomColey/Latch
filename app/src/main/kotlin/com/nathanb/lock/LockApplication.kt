@@ -8,6 +8,7 @@ import com.nathanb.lock.data.database.MIGRATION_2_3
 import com.nathanb.lock.data.database.MIGRATION_3_4
 import com.nathanb.lock.data.database.MIGRATION_4_5
 import com.nathanb.lock.data.database.MIGRATION_5_6
+import com.nathanb.lock.data.repository.LatchRepository
 import com.nathanb.lock.data.repository.LockRepository
 import com.nathanb.lock.schedule.AndroidScheduleEffects
 import com.nathanb.lock.schedule.ScheduleManager
@@ -21,7 +22,12 @@ class LockApplication : Application() {
     lateinit var database: LockDatabase
         private set
 
+    /** Inherited Lock behaviour, retained during the staged Latch migration. */
     lateinit var repository: LockRepository
+        private set
+
+    /** New Latch domain model: Modes, physical Latches and one-way Auto-latch schedules. */
+    lateinit var latchRepository: LatchRepository
         private set
 
     lateinit var scheduleManager: ScheduleManager
@@ -53,6 +59,14 @@ class LockApplication : Application() {
             nfcTagDao = database.nfcTagDao(),
             scheduleDao = database.scheduleDao(),
             scheduleProfileDao = database.scheduleProfileDao(),
+            database = database,
+        )
+
+        latchRepository = LatchRepository(
+            modeDao = database.modeDao(),
+            latchDeviceDao = database.latchDeviceDao(),
+            modeLatchDao = database.modeLatchDao(),
+            autoLatchScheduleDao = database.autoLatchScheduleDao(),
             database = database,
         )
 
