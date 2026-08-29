@@ -7,37 +7,31 @@ import android.nfc.NfcAdapter
 import android.nfc.Tag
 import android.nfc.tech.Ndef
 import android.nfc.tech.NdefFormatable
-import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.annotation.StringRes
 import com.nathanb.lock.BuildConfig
 import com.nathanb.lock.R
 import com.nathanb.lock.data.model.EndReason
+import com.nathanb.lock.data.model.LatchAction
 import com.nathanb.lock.data.model.ProfileType
+import com.nathanb.lock.data.repository.LatchRuntime
 import com.nathanb.lock.data.repository.LockRepository
 
 /** Outcome of trying to write our routing data to a tag during pairing. */
 enum class NdefWriteResult {
-    /** Data written: the tag works everywhere, including when the app is closed. */
     SUCCESS,
-
-    /** Contact lost mid-write (tag moved too soon). Recontact retries automatically. */
     TRANSIENT_FAILURE,
-
-    /** Tag is write-protected or not NDEF-capable: writing will never succeed. */
     WRITE_PROTECTED,
 }
 
 sealed interface NfcResult {
-    /**
-     * A tag was presented in pairing mode. [writeResult] tells whether the routing data
-     * could be written. On TRANSIENT_FAILURE the pairing screen keeps waiting so the next
-     * contact retries; SUCCESS / WRITE_PROTECTED are terminal for this tag.
-     */
     data class TagPaired(val uid: String, val writeResult: NdefWriteResult) : NfcResult
     data class Started(val profileId: Long, val tagName: String?, val isNoEscape: Boolean) : NfcResult
     data class Stopped(val tagName: String?) : NfcResult
+    data class ModeLatched(val modeId: Long, val tagName: String?) : NfcResult
+    data class ModeUnlatched(val tagName: String?) : NfcResult
+    data object ModeActionIgnored : NfcResult
     data object IgnoredNoEscapeActive : NfcResult
     data object UnknownTag : NfcResult
     data class Error(@StringRes val messageRes: Int) : NfcResult
@@ -52,38 +46,17 @@ class NfcManager(
         private const val MIME_TYPE = "application/vnd.latch.toggle"
         private const val APP_PACKAGE = "com.tomcoley.latch"
         private const val PAIRING_GRACE_MS = 3_000L
-
-        /**
-         * One physical tag presentation must produce exactly one toggle. The same scan can
-         * be delivered twice through two paths ~100-500 ms apart (NDEF intent, then Reader
-         * Mode re-reading the tag after the activity cycle re-enables it, seen when the
-         * Reader Mode registration was silently lost on wake from sleep). Ignore the same
-         * UID for this window after a successful toggle.
-         */
         private const val TOGGLE_REFRACTORY_MS = 1_000L
         const val MAX_WRITE_RETRIES = 5
     }
 
     private var isPairingMode = false
-
-    /**
-     * Set when a tag pairs successfully. Within [PAIRING_GRACE_MS], that tag can't toggle a
-     * session: leaving the pairing screen with the tag still near the phone used to fire a
-     * lock session on the rebound.
-     */
     private var justPairedUid: String? = null
     private var justPairedAt: Long = 0L
-
-    /** Last UID that toggled a session, for the [TOGGLE_REFRACTORY_MS] deduplication. */
     private var lastToggleUid: String? = null
     private var lastToggleAt: Long = 0L
-
-    /**
-     * Consecutive interrupted writes on the current pairing attempt. After
-     * [MAX_WRITE_RETRIES] the UI offers to pair anyway (a genuinely defective tag would
-     * otherwise block pairing forever, even though it works fine in the foreground).
-     */
     private var writeFailureCount = 0
+    private var rewriteUid: String? = null
 
     fun consecutiveWriteFailures(): Int = writeFailureCount
 
@@ -97,17 +70,10 @@ class NfcManager(
         writeFailureCount = 0
     }
 
-    /** User accepted a tag we can't write to: pair it, foreground-only. */
     fun forcePairWithoutWrite() {
         isPairingMode = false
         writeFailureCount = 0
     }
-
-    /**
-     * Rewrite the routing data on an already-paired tag (repair path for tags whose write
-     * failed, that were erased by another app, or that were paired before we wrote NDEF).
-     */
-    private var rewriteUid: String? = null
 
     fun enableRewriteMode(uid: String) {
         rewriteUid = uid
@@ -117,17 +83,6 @@ class NfcManager(
         rewriteUid = null
     }
 
-    /**
-     * Enable NFC Reader Mode — modern API that delivers tags via direct callback
-     * instead of the intent-based foreground dispatch system.
-     *
-     * Benefits over foreground dispatch:
-     * - Direct Tag callback (no PendingIntent/Intent overhead)
-     * - Disables platform NFC sounds (app provides its own feedback)
-     * - More reliable across lifecycle transitions
-     *
-     * @param onTagDiscovered called on a binder thread when a tag is detected
-     */
     fun enableReaderMode(activity: ComponentActivity, onTagDiscovered: (Tag) -> Unit) {
         val adapter = NfcAdapter.getDefaultAdapter(activity)
         if (adapter == null) {
@@ -152,24 +107,14 @@ class NfcManager(
     fun disableReaderMode(activity: ComponentActivity) {
         val adapter = NfcAdapter.getDefaultAdapter(activity) ?: return
         adapter.disableReaderMode(activity)
-        // Don't reset isPairingMode here — onPause/onResume cycle
-        // (e.g. going to Settings for permissions) should preserve pairing state
     }
 
-    /**
-     * Process a Tag directly (used by Reader Mode in foreground).
-     */
     suspend fun handleTag(tag: Tag): NfcResult? =
         handleScan(tag.id.toHexString()) { writeNdefToTag(tag) }
 
-    /**
-     * Scan decision tree, independent of the Android [Tag] object so it can be unit-tested.
-     * [write] performs the actual NDEF write and is only invoked when we intend to write.
-     */
     internal suspend fun handleScan(uid: String, write: () -> NdefWriteResult): NfcResult? {
         if (BuildConfig.DEBUG) Log.d(TAG, "Tag scanned: $uid")
 
-        // Rewrite mode (repair): only the targeted tag is written, nothing else happens.
         rewriteUid?.let { target ->
             if (uid != target) return null
             val writeResult = write()
@@ -178,9 +123,6 @@ class NfcManager(
             return NfcResult.TagPaired(uid, writeResult)
         }
 
-        // Pairing mode is STICKY: while the pairing screen is up, every contact is a pairing
-        // attempt, never a session toggle. A transient write failure (tag moved too soon) keeps
-        // the mode on, so simply recontacting the tag retries the write.
         if (isPairingMode) {
             val writeResult = write()
             if (writeResult == NdefWriteResult.TRANSIENT_FAILURE) {
@@ -195,7 +137,6 @@ class NfcManager(
             return NfcResult.TagPaired(uid, writeResult)
         }
 
-        // Grace period: ignore the tag that was just paired (rebound while leaving the screen).
         val paired = justPairedUid
         if (paired != null) {
             if (uid == paired && clock() - justPairedAt < PAIRING_GRACE_MS) {
@@ -205,23 +146,24 @@ class NfcManager(
             justPairedUid = null
         }
 
-        // Refractory window: the same physical presentation delivered twice must not undo itself.
         if (uid == lastToggleUid && clock() - lastToggleAt < TOGGLE_REFRACTORY_MS) {
             if (BuildConfig.DEBUG) Log.d(TAG, "Tap ignored — toggle refractory window")
             return null
         }
 
         val result = processKnownTag(uid)
-        if (result is NfcResult.Started || result is NfcResult.Stopped) {
+        if (
+            result is NfcResult.Started ||
+            result is NfcResult.Stopped ||
+            result is NfcResult.ModeLatched ||
+            result is NfcResult.ModeUnlatched
+        ) {
             lastToggleUid = uid
             lastToggleAt = clock()
         }
         return result
     }
 
-    /**
-     * Process an NFC Intent (used for background/manifest-based tag delivery).
-     */
     suspend fun handleIntent(intent: Intent): NfcResult? {
         val action = intent.action ?: return null
         if (action != NfcAdapter.ACTION_TAG_DISCOVERED &&
@@ -234,12 +176,47 @@ class NfcManager(
     }
 
     /**
-     * Resolve what a known tag does against the current lock state:
-     * - locked + no-escape  -> ignored (timer is sacred)
-     * - locked + standard   -> stop (universal deactivator: any tag stops a standard session)
-     * - idle                -> start the tag's own profile
+     * Latch-owned tags are resolved before the inherited Lock model. Once a tag has been added to
+     * Latch, it never falls through to old Profile behaviour. This prevents a physical Latch with
+     * no valid action for the current Mode from accidentally toggling an inherited Lock session.
      */
     internal suspend fun processKnownTag(uid: String): NfcResult {
+        val latchRepository = LatchRuntime.repositoryOrNull()
+        val latchDevice = latchRepository?.getLatchDevice(uid)
+        if (latchRepository != null && latchDevice != null) {
+            val links = latchRepository.getActionsForLatch(uid)
+            val activeModeId = latchRepository.activeModeState.value.activeModeId
+
+            if (activeModeId != null) {
+                val releaseLink = links.firstOrNull { link ->
+                    link.modeId == activeModeId &&
+                        (LatchAction.fromValue(link.action) == LatchAction.UNLATCH ||
+                            LatchAction.fromValue(link.action) == LatchAction.TOGGLE)
+                }
+                return if (releaseLink != null) {
+                    latchRepository.unlatch()
+                    if (BuildConfig.DEBUG) Log.d(TAG, "Mode $activeModeId unlatched by ${latchDevice.name}")
+                    NfcResult.ModeUnlatched(latchDevice.name)
+                } else {
+                    if (BuildConfig.DEBUG) Log.d(TAG, "Latch ${latchDevice.name} has no release action for Mode $activeModeId")
+                    NfcResult.ModeActionIgnored
+                }
+            }
+
+            val activationLink = links.firstOrNull { link ->
+                val action = LatchAction.fromValue(link.action)
+                action == LatchAction.LATCH || action == LatchAction.TOGGLE
+            }
+            return if (activationLink != null && latchRepository.latch(activationLink.modeId)) {
+                if (BuildConfig.DEBUG) Log.d(TAG, "Mode ${activationLink.modeId} latched by ${latchDevice.name}")
+                NfcResult.ModeLatched(activationLink.modeId, latchDevice.name)
+            } else {
+                if (BuildConfig.DEBUG) Log.d(TAG, "Latch ${latchDevice.name} has no activation action")
+                NfcResult.ModeActionIgnored
+            }
+        }
+
+        // Inherited Lock behaviour remains as a fallback for tags not yet migrated into Latch.
         val knownTag = repository.findNfcTag(uid)
         if (knownTag == null) {
             if (!repository.hasAnyNfcTag()) {
@@ -264,8 +241,6 @@ class NfcManager(
             val profile = profileId?.let { repository.getProfile(it) }
             when {
                 profile == null -> NfcResult.Error(R.string.toast_error_no_profile)
-                // Profile exists but has no apps yet (onboarding app picker skipped):
-                // starting a session would lock nothing and confuse the user.
                 profile.blockedPackages.isEmpty() -> NfcResult.Error(R.string.toast_error_no_apps)
                 else -> {
                     repository.startLockSession(profile.id)
@@ -277,14 +252,6 @@ class NfcManager(
         }
     }
 
-    /**
-     * Write NDEF message to tag so it's routed via NDEF_DISCOVERED (highest priority)
-     * instead of TAG_DISCOVERED (lowest priority, causes dual-task bug).
-     *
-     * The message contains:
-     * 1. A custom MIME record (application/vnd.latch.toggle) — used by Android for intent routing
-     * 2. An Android Application Record (AAR) — forces Android to launch Latch specifically
-     */
     private fun writeNdefToTag(tag: Tag): NdefWriteResult {
         val mimeRecord = NdefRecord.createMime(MIME_TYPE, "latch".toByteArray())
         val aarRecord = NdefRecord.createApplicationRecord(APP_PACKAGE)
@@ -304,7 +271,6 @@ class NfcManager(
                 if (BuildConfig.DEBUG) Log.d(TAG, "NDEF written to formatted tag")
                 NdefWriteResult.SUCCESS
             } else {
-                // Tag not NDEF-formatted — format it first
                 val formatable = NdefFormatable.get(tag)
                     ?: run {
                         if (BuildConfig.DEBUG) Log.w(TAG, "Tag does not support NDEF")
@@ -317,11 +283,9 @@ class NfcManager(
                 NdefWriteResult.SUCCESS
             }
         } catch (e: android.nfc.FormatException) {
-            // The tag rejected the message itself (bad format, too small): retrying won't help.
             if (BuildConfig.DEBUG) Log.e(TAG, "NDEF format rejected: ${e.message}", e)
             NdefWriteResult.WRITE_PROTECTED
         } catch (e: Exception) {
-            // IOException & co: contact was lost mid-write. Recontacting the tag retries.
             if (BuildConfig.DEBUG) Log.e(TAG, "NDEF write interrupted: ${e.message}", e)
             NdefWriteResult.TRANSIENT_FAILURE
         }
