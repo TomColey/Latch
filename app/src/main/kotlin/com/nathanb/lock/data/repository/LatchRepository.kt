@@ -68,10 +68,10 @@ class LatchRepository(
     }
 
     suspend fun getLatchActionsForMode(modeId: Long): List<ModeLatchLink> =
-        modeLatchDao.getByModeOnce(modeId)
+        modeLatchDao.getByMode(modeId)
 
     suspend fun getActionsForLatch(uid: String): List<ModeLatchLink> =
-        modeLatchDao.getByLatchOnce(uid)
+        modeLatchDao.getByLatch(uid)
 
     suspend fun setLatchAction(modeId: Long, latchUid: String, action: LatchAction) {
         modeLatchDao.insert(
@@ -104,7 +104,7 @@ class LatchRepository(
     }
 
     suspend fun getAutoLatchSchedules(modeId: Long): List<AutoLatchSchedule> =
-        autoLatchScheduleDao.getByModeOnce(modeId)
+        autoLatchScheduleDao.getByMode(modeId)
 
     suspend fun addAutoLatchSchedule(
         modeId: Long,
