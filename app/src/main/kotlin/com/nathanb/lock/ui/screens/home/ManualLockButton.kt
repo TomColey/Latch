@@ -19,26 +19,33 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
-import com.nathanb.lock.R
 import androidx.compose.ui.graphics.Color
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.nathanb.lock.LockApplication
+import com.nathanb.lock.R
 import com.nathanb.lock.ui.theme.LockTheme
+import com.nathanb.lock.ui.theme.SatoshiFamily
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -53,11 +60,22 @@ internal fun ManualLockButton(
     showSubtitle: Boolean = true,
     accentColor: Color? = null,
 ) {
+    // onLock is retained temporarily so the inherited Home call sites do not need to change.
+    // Latch-native manual activation now always goes through the Mode picker below.
+    @Suppress("UNUSED_VARIABLE") val inheritedOnLock = onLock
+
     val colors = LockTheme.colors
     val tintColor = accentColor ?: colors.onSurface
     val view = LocalView.current
+    val context = LocalContext.current
+    val app = context.applicationContext as LockApplication
+    val scope = rememberCoroutineScope()
+    val modes by app.latchRepository.modes.collectAsStateWithLifecycle(initialValue = emptyList())
+    val activeModeState by app.latchRepository.activeModeState.collectAsStateWithLifecycle()
+
     var isPressed by remember { mutableStateOf(false) }
     var shakeTrigger by remember { mutableIntStateOf(0) }
+    var showModePicker by remember { mutableStateOf(false) }
 
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.9f else 1f,
@@ -99,7 +117,7 @@ internal fun ManualLockButton(
                 }
                 completed = true
                 view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
-                onLock()
+                if (activeModeState.activeModeId == null) showModePicker = true
             } finally {
                 if (!completed) {
                     view.performHapticFeedback(HapticFeedbackConstants.REJECT)
@@ -111,10 +129,7 @@ internal fun ManualLockButton(
         }
     }
 
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = modifier,
-    ) {
+    Box(contentAlignment = Alignment.Center, modifier = modifier) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Box(
                 contentAlignment = Alignment.Center,
@@ -134,7 +149,7 @@ internal fun ManualLockButton(
             ) {
                 Icon(
                     imageVector = Icons.Default.Lock,
-                    contentDescription = stringResource(R.string.home_activate_lock),
+                    contentDescription = "Latch now",
                     modifier = Modifier.size(24.dp),
                     tint = tintColor.copy(alpha = 0.7f),
                 )
@@ -142,7 +157,6 @@ internal fun ManualLockButton(
 
             if (showSubtitle) {
                 Spacer(Modifier.height(8.dp))
-
                 Text(
                     text = stringResource(R.string.home_or_scan_nfc),
                     style = MaterialTheme.typography.labelSmall,
@@ -150,5 +164,54 @@ internal fun ManualLockButton(
                 )
             }
         }
+    }
+
+    if (showModePicker) {
+        AlertDialog(
+            onDismissRequest = { showModePicker = false },
+            title = {
+                Text(
+                    text = "Latch now",
+                    fontFamily = SatoshiFamily,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                )
+            },
+            text = {
+                Column {
+                    if (modes.isEmpty()) {
+                        Text(
+                            text = "Create a Mode first, then choose it here whenever you want to latch without scanning a physical Latch.",
+                            fontFamily = SatoshiFamily,
+                        )
+                    } else {
+                        Text(
+                            text = "Choose a Mode. Once latched, you will still need its authorised physical Unlatch or safety release to regain full access.",
+                            fontFamily = SatoshiFamily,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        modes.forEach { mode ->
+                            TextButton(
+                                onClick = {
+                                    showModePicker = false
+                                    scope.launch {
+                                        if (app.latchRepository.activeModeState.value.activeModeId == null) {
+                                            app.latchRepository.latch(mode.id)
+                                        }
+                                    }
+                                },
+                            ) {
+                                Text(mode.name, fontFamily = SatoshiFamily, color = colors.primary)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showModePicker = false }) {
+                    Text("Cancel", fontFamily = SatoshiFamily)
+                }
+            },
+        )
     }
 }
