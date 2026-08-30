@@ -8,9 +8,14 @@ object Constants {
         "com.android.launcher3",
     )
 
-    /** Packages that must never be blocked */
+    /**
+     * Packages that must remain reachable for essential device operation.
+     *
+     * Android Settings is deliberately NOT protected. While a Latch Mode is active it must obey
+     * the same allow-only rule as every other app, otherwise App info / Force stop / Accessibility
+     * settings become a trivial way to dismantle the active restriction.
+     */
     val WHITELISTED_PACKAGES = setOf(
-        "com.android.settings",
         "com.google.android.dialer",
         "com.android.phone",
         "com.nathanb.lock",
