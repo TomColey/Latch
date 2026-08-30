@@ -118,8 +118,7 @@ fun HomeScreen(
         val duration = activeMode?.maxLatchDurationMs
         if (latchedAt == null || duration == null) null
         else {
-            val releaseAt = Instant.ofEpochMilli(latchedAt + duration)
-                .atZone(ZoneId.systemDefault())
+            val releaseAt = Instant.ofEpochMilli(latchedAt + duration).atZone(ZoneId.systemDefault())
             releaseAt.format(DateTimeFormatter.ofPattern("HH:mm"))
         }
     }
@@ -129,15 +128,9 @@ fun HomeScreen(
         label = "latchHomeBackground",
     )
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(backgroundColor),
-    ) {
+    Box(modifier = Modifier.fillMaxSize().background(backgroundColor)) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 28.dp, vertical = 24.dp),
+            modifier = Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Spacer(Modifier.weight(0.45f))
@@ -145,9 +138,7 @@ fun HomeScreen(
             androidx.compose.foundation.Image(
                 painter = painterResource(R.drawable.ic_latch_logo),
                 contentDescription = "Latch",
-                modifier = Modifier
-                    .width(190.dp)
-                    .height(46.dp),
+                modifier = Modifier.width(190.dp).height(46.dp),
             )
 
             if (BuildConfig.DEBUG) {
@@ -199,11 +190,7 @@ fun HomeScreen(
             shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
         ) {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .navigationBarsPadding()
-                    .padding(horizontal = 20.dp)
-                    .padding(bottom = 24.dp),
+                modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 20.dp).padding(bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Text(
@@ -214,7 +201,7 @@ fun HomeScreen(
                     color = colors.onSurface,
                 )
                 Text(
-                    text = "Choose a Mode to activate. You will still need its authorised physical Latch to unlatch early.",
+                    text = "Choose a Mode to activate. You will still need its authorised Latch device to unlatch early.",
                     fontFamily = SatoshiFamily,
                     fontSize = 13.sp,
                     lineHeight = 19.sp,
@@ -239,47 +226,21 @@ fun HomeScreen(
                         },
                     ) {
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
+                            modifier = Modifier.fillMaxWidth().padding(16.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
                             Box(
-                                modifier = Modifier
-                                    .size(42.dp)
-                                    .clip(CircleShape)
-                                    .background(colors.primary.copy(alpha = 0.12f)),
+                                modifier = Modifier.size(42.dp).clip(CircleShape).background(colors.primary.copy(alpha = 0.12f)),
                                 contentAlignment = Alignment.Center,
                             ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Shield,
-                                    contentDescription = null,
-                                    tint = colors.primaryDark,
-                                    modifier = Modifier.size(21.dp),
-                                )
+                                Icon(Icons.Outlined.Shield, contentDescription = null, tint = colors.primaryDark, modifier = Modifier.size(21.dp))
                             }
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = mode.name,
-                                    fontFamily = SatoshiFamily,
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 16.sp,
-                                    color = colors.onSurface,
-                                )
-                                Text(
-                                    text = "${mode.allowedPackages.size} apps get through",
-                                    fontFamily = SatoshiFamily,
-                                    fontSize = 12.sp,
-                                    color = colors.onSurfaceVariant,
-                                )
+                                Text(mode.name, fontFamily = SatoshiFamily, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = colors.onSurface)
+                                Text("${mode.allowedPackages.size} apps get through", fontFamily = SatoshiFamily, fontSize = 12.sp, color = colors.onSurfaceVariant)
                             }
-                            Icon(
-                                imageVector = Icons.Outlined.Lock,
-                                contentDescription = null,
-                                tint = colors.primary,
-                                modifier = Modifier.size(20.dp),
-                            )
+                            Icon(Icons.Outlined.Lock, contentDescription = null, tint = colors.primary, modifier = Modifier.size(20.dp))
                         }
                     }
                 }
@@ -289,11 +250,7 @@ fun HomeScreen(
 }
 
 @Composable
-private fun PermissionWarningCard(
-    accessibilityOk: Boolean,
-    overlayOk: Boolean,
-    onClick: () -> Unit,
-) {
+private fun PermissionWarningCard(accessibilityOk: Boolean, overlayOk: Boolean, onClick: () -> Unit) {
     val colors = LockTheme.colors
     val missing = buildList {
         if (!accessibilityOk) add("Accessibility")
@@ -308,34 +265,18 @@ private fun PermissionWarningCard(
         onClick = onClick,
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Box(
-                modifier = Modifier
-                    .size(42.dp)
-                    .clip(RoundedCornerShape(13.dp))
-                    .background(colors.error.copy(alpha = 0.12f)),
+                modifier = Modifier.size(42.dp).clip(RoundedCornerShape(13.dp)).background(colors.error.copy(alpha = 0.12f)),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(
-                    imageVector = Icons.Outlined.WarningAmber,
-                    contentDescription = null,
-                    tint = colors.error,
-                    modifier = Modifier.size(22.dp),
-                )
+                Icon(Icons.Outlined.WarningAmber, contentDescription = null, tint = colors.error, modifier = Modifier.size(22.dp))
             }
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Latch needs attention",
-                    fontFamily = SatoshiFamily,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp,
-                    color = colors.onSurface,
-                )
+                Text("Latch needs attention", fontFamily = SatoshiFamily, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = colors.onSurface)
                 Text(
                     text = "Missing: ${missing.joinToString(", ")}. Tap to fix permissions.",
                     fontFamily = SatoshiFamily,
@@ -349,11 +290,7 @@ private fun PermissionWarningCard(
 }
 
 @Composable
-private fun UnlatchedHomeContent(
-    hasModes: Boolean,
-    onLatchNow: () -> Unit,
-    latchNowFill: Animatable<Float, *>,
-) {
+private fun UnlatchedHomeContent(hasModes: Boolean, onLatchNow: () -> Unit, latchNowFill: Animatable<Float, *>) {
     val colors = LockTheme.colors
 
     Text(
@@ -366,37 +303,16 @@ private fun UnlatchedHomeContent(
         textAlign = TextAlign.Center,
     )
     Spacer(Modifier.height(10.dp))
-    Text(
-        text = "Your phone is open.",
-        fontFamily = SatoshiFamily,
-        fontSize = 16.sp,
-        color = colors.onSurfaceVariant,
-        textAlign = TextAlign.Center,
-    )
+    Text("Your phone is open.", fontFamily = SatoshiFamily, fontSize = 16.sp, color = colors.onSurfaceVariant, textAlign = TextAlign.Center)
 
     Spacer(Modifier.height(38.dp))
 
     if (hasModes) {
-        ManualLockButton(
-            onLock = onLatchNow,
-            fillProgress = latchNowFill,
-            showSubtitle = false,
-        )
+        ManualLockButton(onLock = onLatchNow, fillProgress = latchNowFill, showSubtitle = false)
         Spacer(Modifier.height(10.dp))
-        Text(
-            text = "Hold to Latch now",
-            fontFamily = SatoshiFamily,
-            fontWeight = FontWeight.Medium,
-            fontSize = 13.sp,
-            color = colors.onSurfaceVariant,
-        )
+        Text("Hold to Latch now", fontFamily = SatoshiFamily, fontWeight = FontWeight.Medium, fontSize = 13.sp, color = colors.onSurfaceVariant)
         Spacer(Modifier.height(5.dp))
-        Text(
-            text = "Or scan a physical Latch",
-            fontFamily = SatoshiFamily,
-            fontSize = 12.sp,
-            color = colors.onSurfaceVariant.copy(alpha = 0.75f),
-        )
+        Text("Or scan a Latch device", fontFamily = SatoshiFamily, fontSize = 12.sp, color = colors.onSurfaceVariant.copy(alpha = 0.75f))
     } else {
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -418,11 +334,7 @@ private fun UnlatchedHomeContent(
 }
 
 @Composable
-private fun LatchedHomeContent(
-    mode: Mode,
-    releaseLatchNames: List<String>,
-    safetyReleaseText: String?,
-) {
+private fun LatchedHomeContent(mode: Mode, releaseLatchNames: List<String>, safetyReleaseText: String?) {
     val colors = LockTheme.colors
 
     Text(
@@ -435,14 +347,7 @@ private fun LatchedHomeContent(
         textAlign = TextAlign.Center,
     )
     Spacer(Modifier.height(8.dp))
-    Text(
-        text = mode.name,
-        fontFamily = SatoshiFamily,
-        fontWeight = FontWeight.Bold,
-        fontSize = 24.sp,
-        color = colors.onSurface,
-        textAlign = TextAlign.Center,
-    )
+    Text(mode.name, fontFamily = SatoshiFamily, fontWeight = FontWeight.Bold, fontSize = 24.sp, color = colors.onSurface, textAlign = TextAlign.Center)
 
     Spacer(Modifier.height(30.dp))
 
@@ -450,7 +355,7 @@ private fun LatchedHomeContent(
         icon = Icons.Outlined.Nfc,
         title = "To unlatch",
         value = when {
-            releaseLatchNames.isEmpty() -> "No physical Unlatch assigned"
+            releaseLatchNames.isEmpty() -> "No Unlatch device assigned"
             releaseLatchNames.size == 1 -> "Scan ${releaseLatchNames.first()}"
             else -> "Scan ${releaseLatchNames.dropLast(1).joinToString(", ")} or ${releaseLatchNames.last()}"
         },
@@ -467,7 +372,7 @@ private fun LatchedHomeContent(
     Spacer(Modifier.height(22.dp))
 
     Text(
-        text = "There is no manual unlatch. Use an authorised physical Latch or wait for the safety release.",
+        text = "There is no manual unlatch. Use an authorised Latch device or wait for the safety release.",
         fontFamily = SatoshiFamily,
         fontSize = 12.sp,
         lineHeight = 18.sp,
@@ -478,11 +383,7 @@ private fun LatchedHomeContent(
 }
 
 @Composable
-private fun HomeStatusCard(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    title: String,
-    value: String,
-) {
+private fun HomeStatusCard(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, value: String) {
     val colors = LockTheme.colors
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -491,41 +392,19 @@ private fun HomeStatusCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Box(
-                modifier = Modifier
-                    .size(42.dp)
-                    .clip(CircleShape)
-                    .background(colors.primary.copy(alpha = 0.12f)),
+                modifier = Modifier.size(42.dp).clip(CircleShape).background(colors.primary.copy(alpha = 0.12f)),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = colors.primaryDark,
-                    modifier = Modifier.size(21.dp),
-                )
+                Icon(imageVector = icon, contentDescription = null, tint = colors.primaryDark, modifier = Modifier.size(21.dp))
             }
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    fontFamily = SatoshiFamily,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 13.sp,
-                    color = colors.onSurfaceVariant,
-                )
-                Text(
-                    text = value,
-                    fontFamily = SatoshiFamily,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp,
-                    color = colors.onSurface,
-                )
+                Text(title, fontFamily = SatoshiFamily, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = colors.onSurfaceVariant)
+                Text(value, fontFamily = SatoshiFamily, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = colors.onSurface)
             }
         }
     }
