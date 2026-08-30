@@ -147,7 +147,7 @@ private fun ModeListItem(mode: Mode, schedule: AutoLatchSchedule?, onClick: () -
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(mode.name, fontFamily = SatoshiFamily, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = colors.onSurface)
                 Text(
-                    "${mode.allowedPackages.size} apps get through · ${formatDuration(mode.maxLatchDurationMs)} max",
+                    "${mode.allowedPackages.size} apps get through · safety release ${formatDuration(mode.maxLatchDurationMs)}",
                     fontFamily = SatoshiFamily,
                     fontSize = 13.sp,
                     color = colors.onSurfaceVariant,
