@@ -77,13 +77,12 @@ import com.nathanb.lock.ui.viewmodel.LockViewModel
 import kotlinx.coroutines.launch
 
 private val durationOptions = listOf(
-    30L * 60_000L to "30 min",
-    60L * 60_000L to "1 hr",
-    2L * 60L * 60_000L to "2 hr",
     4L * 60L * 60_000L to "4 hr",
     8L * 60L * 60_000L to "8 hr",
     12L * 60L * 60_000L to "12 hr",
+    24L * 60L * 60_000L to "24 hr",
 )
+private val validSafetyDurations = durationOptions.map { it.first }.toSet()
 
 private data class DayOption(val label: String, val bit: Int)
 private val autoLatchDays = listOf(
@@ -118,7 +117,7 @@ fun NewModeScreen(
     val restoredDraft = remember(modeId) { ModeEditorDraftStore.take(modeId) }
     var step by remember(modeId) { mutableStateOf(restoredDraft?.step ?: 0) }
     var name by remember(modeId) { mutableStateOf(restoredDraft?.name.orEmpty()) }
-    var selectedDuration by remember(modeId) { mutableStateOf(restoredDraft?.maxLatchDurationMs) }
+    var selectedDuration by remember(modeId) { mutableStateOf(restoredDraft?.maxLatchDurationMs?.takeIf { it in validSafetyDurations }) }
     val selectedApps = remember(modeId) {
         mutableStateMapOf<String, Boolean>().apply { restoredDraft?.allowedPackages?.forEach { put(it, true) } }
     }
@@ -140,7 +139,7 @@ fun NewModeScreen(
         if (initialized) return@LaunchedEffect
         val mode = existingMode ?: return@LaunchedEffect
         name = mode.name
-        selectedDuration = mode.maxLatchDurationMs
+        selectedDuration = mode.maxLatchDurationMs.takeIf { it in validSafetyDurations }
         mode.allowedPackages.forEach { selectedApps[it] = true }
         app.latchRepository.getLatchActionsForMode(mode.id).forEach { link ->
             when (LatchAction.fromValue(link.action)) {
@@ -239,7 +238,7 @@ fun NewModeScreen(
 
     val stepTitle = when (step) {
         0 -> "Apps"
-        1 -> "Physical Latches"
+        1 -> "Latch devices"
         2 -> "Auto-latch"
         else -> "Safety release"
     }
@@ -360,10 +359,10 @@ fun NewModeScreen(
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
                 Spacer(Modifier.height(4.dp))
-                SectionHeading("Choose your physical Latches", "A Latch can release many Modes, but it can only start one.")
+                SectionHeading("Choose your Latch devices", "A Latch device can release many Modes, but it can only start one.")
                 LatchChoiceCard(
                     title = "Latch with",
-                    subtitle = "Scan this Latch to start the Mode when your phone is open.",
+                    subtitle = "Scan this Latch device to start the Mode when your phone is open.",
                     selectedUid = latchUid,
                     latches = latchDevices.map { it.uid to it.name },
                     activationModeName = { uid -> activationConflictFor(uid)?.name },
@@ -374,15 +373,15 @@ fun NewModeScreen(
                 )
                 LatchChoiceCard(
                     title = "Unlatch with",
-                    subtitle = "Scan this Latch to return to full access while this Mode is active.",
+                    subtitle = "Scan this Latch device to return to full access while this Mode is active.",
                     selectedUid = unlatchUid,
                     latches = latchDevices.map { it.uid to it.name },
                     activationModeName = { null },
                     onSelect = { uid, _ -> unlatchUid = uid },
                 )
                 InfoCard(
-                    if (latchDevices.isEmpty()) "No physical Latches have been added yet. Add one from Settings before creating a Mode."
-                    else "Using the same physical Latch for both actions makes it a toggle. Using different Latches lets you build physical friction into the Mode."
+                    if (latchDevices.isEmpty()) "No Latch devices have been added yet. Add one from Settings before creating a Mode."
+                    else "Using the same Latch device for both actions makes it a toggle. Using different Latch devices lets you build physical friction into the Mode."
                 )
                 Spacer(Modifier.height(16.dp))
             }
@@ -421,7 +420,7 @@ fun NewModeScreen(
                         )
                     }
                 }
-                InfoCard("Auto-latch only starts this Mode. It never unlatches your phone and it will not replace another Mode that is already active. You still need an authorised physical Latch to release it early.")
+                InfoCard("Auto-latch only starts this Mode. It never unlatches your phone and it will not replace another Mode that is already active. You still need an authorised Latch device to release it early.")
 
                 if (autoLatchEnabled) {
                     Text("Time", fontFamily = SatoshiFamily, fontWeight = FontWeight.Bold, fontSize = 17.sp, color = colors.onSurface)
@@ -474,7 +473,7 @@ fun NewModeScreen(
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
                 Spacer(Modifier.height(4.dp))
-                SectionHeading("Maximum latch time", "Choose the latest point at which Latch must release automatically.")
+                SectionHeading("Safety release", "Choose a long-stop failsafe in case your Latch device is unavailable.")
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
@@ -493,9 +492,9 @@ fun NewModeScreen(
                             Icon(Icons.Outlined.Timer, contentDescription = null, tint = colors.primaryDark, modifier = Modifier.size(22.dp))
                         }
                         Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                            Text("Why does Latch need a maximum?", fontFamily = SatoshiFamily, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = colors.onSurface)
+                            Text("A failsafe, not a timer", fontFamily = SatoshiFamily, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = colors.onSurface)
                             Text(
-                                "This is a safety release, not a session timer. If your physical Latch is lost, damaged or unavailable, full access will return automatically after this time. Normally you unlatch earlier by scanning your authorised Unlatch.",
+                                "The safety release is only there if your Latch device is lost, damaged or unavailable. It is deliberately long so normal unlatching still means scanning your authorised Latch device.",
                                 fontFamily = SatoshiFamily,
                                 fontSize = 13.sp,
                                 lineHeight = 19.sp,
@@ -513,19 +512,19 @@ fun NewModeScreen(
                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text("Safety release after", fontFamily = SatoshiFamily, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = colors.onSurface)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            durationOptions.take(3).forEach { (value, label) ->
+                            durationOptions.take(2).forEach { (value, label) ->
                                 FilterChip(selected = selectedDuration == value, onClick = { selectedDuration = value }, label = { Text(label, fontFamily = SatoshiFamily) })
                             }
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            durationOptions.drop(3).forEach { (value, label) ->
+                            durationOptions.drop(2).forEach { (value, label) ->
                                 FilterChip(selected = selectedDuration == value, onClick = { selectedDuration = value }, label = { Text(label, fontFamily = SatoshiFamily) })
                             }
                         }
                     }
                 }
                 if (selectedDuration == null) {
-                    Text("Choose a maximum latch time to finish this Mode.", fontFamily = SatoshiFamily, fontSize = 13.sp, color = colors.onSurfaceVariant)
+                    Text("Choose a safety release failsafe to finish this Mode.", fontFamily = SatoshiFamily, fontSize = 13.sp, color = colors.onSurfaceVariant)
                 }
                 Spacer(Modifier.height(16.dp))
             }
@@ -536,7 +535,7 @@ fun NewModeScreen(
         AlertDialog(
             onDismissRequest = { pendingConflict = null },
             title = { Text("${conflict.latchName} already starts ${conflict.mode.name}", fontFamily = SatoshiFamily, fontWeight = FontWeight.Bold) },
-            text = { Text("A physical Latch can only start one Mode, otherwise a scan would be ambiguous. You can edit ${conflict.mode.name}, or choose a different Latch here.", fontFamily = SatoshiFamily) },
+            text = { Text("A Latch device can only start one Mode, otherwise a scan would be ambiguous. You can edit ${conflict.mode.name}, or choose a different Latch device here.", fontFamily = SatoshiFamily) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -548,7 +547,7 @@ fun NewModeScreen(
                     Text("Edit ${conflict.mode.name}", fontFamily = SatoshiFamily, fontWeight = FontWeight.Bold, color = colors.primary)
                 }
             },
-            dismissButton = { TextButton(onClick = { pendingConflict = null }) { Text("Choose another Latch", fontFamily = SatoshiFamily) } },
+            dismissButton = { TextButton(onClick = { pendingConflict = null }) { Text("Choose another Latch device", fontFamily = SatoshiFamily) } },
         )
     }
 
@@ -556,7 +555,7 @@ fun NewModeScreen(
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
             title = { Text("Delete ${existingMode.name}?", fontFamily = SatoshiFamily, fontWeight = FontWeight.Bold) },
-            text = { Text("This will remove the Mode, its Latch assignments and its Auto-latch setting.", fontFamily = SatoshiFamily) },
+            text = { Text("This will remove the Mode, its Latch device assignments and its Auto-latch setting.", fontFamily = SatoshiFamily) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -608,7 +607,7 @@ private fun LatchChoiceCard(
                 }
             }
             if (latches.isEmpty()) {
-                Text("No physical Latches added yet", fontFamily = SatoshiFamily, fontSize = 13.sp, color = colors.onSurfaceVariant)
+                Text("No Latch devices added yet", fontFamily = SatoshiFamily, fontSize = 13.sp, color = colors.onSurfaceVariant)
             } else {
                 latches.forEach { (uid, latchName) ->
                     val conflictModeName = activationModeName(uid)
