@@ -143,7 +143,7 @@ fun SettingsScreen(
                     LatchActionCard(
                         modifier = Modifier.weight(1f),
                         icon = Icons.Outlined.Nfc,
-                        title = "Physical Latches",
+                        title = "Latch devices",
                         subtitle = if (latchDevices.size == 1) "1 registered" else "${latchDevices.size} registered",
                         count = latchDevices.size,
                         onClick = onNavigateToNfcTags,
@@ -175,7 +175,7 @@ fun SettingsScreen(
                     SettingsRow(
                         icon = Icons.Outlined.PrivacyTip,
                         title = "Privacy",
-                        subtitle = "Local-first. Modes, Latches and active state stay on this device.",
+                        subtitle = "Local-first. Modes, Latch devices and active state stay on this device.",
                     )
                     SettingsDivider()
                     SettingsRow(
