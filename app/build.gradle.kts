@@ -23,8 +23,8 @@ android {
         applicationId = "com.tomcoley.latch"
         minSdk = 33
         targetSdk = 36
-        versionCode = 1017
-        versionName = "0.1.0-dev.17"
+        versionCode = 1018
+        versionName = "0.1.0-dev.18"
     }
 
     signingConfigs {
