@@ -21,13 +21,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Nfc
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -45,7 +43,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -120,15 +117,11 @@ fun LatchesScreen(
                         onBack()
                     },
                 ) {
-                    Icon(
-                        Icons.AutoMirrored.Outlined.ArrowBack,
-                        contentDescription = "Back",
-                        tint = colors.primary,
-                    )
+                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back", tint = colors.primary)
                 }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Physical Latches",
+                        text = "Latch devices",
                         fontFamily = SatoshiFamily,
                         fontWeight = FontWeight.Black,
                         fontSize = 24.sp,
@@ -136,7 +129,7 @@ fun LatchesScreen(
                         letterSpacing = (-0.5).sp,
                     )
                     Text(
-                        text = "The physical places that start and release your Modes",
+                        text = "The NFC devices that start and release your Modes",
                         fontFamily = SatoshiFamily,
                         fontSize = 13.sp,
                         color = colors.onSurfaceVariant,
@@ -187,7 +180,7 @@ fun LatchesScreen(
                             Icon(Icons.Outlined.Nfc, contentDescription = null, tint = colors.primary, modifier = Modifier.size(28.dp))
                         }
                         Text(
-                            text = "Waiting for a physical Latch…",
+                            text = "Waiting for a Latch device…",
                             fontFamily = SatoshiFamily,
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp,
@@ -235,13 +228,7 @@ fun LatchesScreen(
                             Icon(Icons.Outlined.Nfc, contentDescription = null, tint = colors.primaryDark, modifier = Modifier.size(22.dp))
                         }
                         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(
-                                text = latch.name,
-                                fontFamily = SatoshiFamily,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 16.sp,
-                                color = colors.onSurface,
-                            )
+                            Text(latch.name, fontFamily = SatoshiFamily, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = colors.onSurface)
                             Text(
                                 text = buildString {
                                     if (activationMode != null) append("Starts ${activationMode.name}") else append("Does not start a Mode")
@@ -267,7 +254,7 @@ fun LatchesScreen(
 
             if (latches.isEmpty() && !scanning) {
                 Text(
-                    text = "No physical Latches yet. Add an NFC tag and give it a name based on where you keep it, such as Bedroom, Kitchen or Desk.",
+                    text = "No Latch devices yet. Add an NFC tag and give it a name based on where you keep it, such as Bedroom, Kitchen or Desk.",
                     fontFamily = SatoshiFamily,
                     fontSize = 13.sp,
                     lineHeight = 19.sp,
@@ -295,7 +282,7 @@ fun LatchesScreen(
                     ) {
                         Icon(Icons.Outlined.Add, contentDescription = null, tint = colors.primaryDark, modifier = Modifier.size(20.dp))
                         Text(
-                            text = "Add physical Latch",
+                            text = "Add Latch device",
                             fontFamily = SatoshiFamily,
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 14.sp,
@@ -316,7 +303,7 @@ fun LatchesScreen(
                 namingUid = null
                 nameDraft = ""
             },
-            title = { Text("Name this Latch", fontFamily = SatoshiFamily, fontWeight = FontWeight.Bold) },
+            title = { Text("Name this Latch device", fontFamily = SatoshiFamily, fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
@@ -344,16 +331,14 @@ fun LatchesScreen(
                         }
                     },
                 ) {
-                    Text("Add Latch", fontFamily = SatoshiFamily, fontWeight = FontWeight.Bold, color = colors.primary)
+                    Text("Add device", fontFamily = SatoshiFamily, fontWeight = FontWeight.Bold, color = colors.primary)
                 }
             },
             dismissButton = {
                 TextButton(onClick = {
                     namingUid = null
                     nameDraft = ""
-                }) {
-                    Text("Cancel", fontFamily = SatoshiFamily)
-                }
+                }) { Text("Cancel", fontFamily = SatoshiFamily) }
             },
         )
     }
@@ -361,7 +346,7 @@ fun LatchesScreen(
     renameTarget?.let { latch ->
         AlertDialog(
             onDismissRequest = { renameTarget = null },
-            title = { Text("Rename Latch", fontFamily = SatoshiFamily, fontWeight = FontWeight.Bold) },
+            title = { Text("Rename Latch device", fontFamily = SatoshiFamily, fontWeight = FontWeight.Bold) },
             text = {
                 OutlinedTextField(
                     value = nameDraft,
@@ -380,15 +365,9 @@ fun LatchesScreen(
                             nameDraft = ""
                         }
                     },
-                ) {
-                    Text("Save", fontFamily = SatoshiFamily, fontWeight = FontWeight.Bold, color = colors.primary)
-                }
+                ) { Text("Save", fontFamily = SatoshiFamily, fontWeight = FontWeight.Bold, color = colors.primary) }
             },
-            dismissButton = {
-                TextButton(onClick = { renameTarget = null }) {
-                    Text("Cancel", fontFamily = SatoshiFamily)
-                }
-            },
+            dismissButton = { TextButton(onClick = { renameTarget = null }) { Text("Cancel", fontFamily = SatoshiFamily) } },
         )
     }
 
@@ -396,7 +375,7 @@ fun LatchesScreen(
         AlertDialog(
             onDismissRequest = { duplicateTarget = null },
             title = { Text("${latch.name} is already added", fontFamily = SatoshiFamily, fontWeight = FontWeight.Bold) },
-            text = { Text("This NFC tag is already a physical Latch. You can rename it from the Latches list.", fontFamily = SatoshiFamily) },
+            text = { Text("This NFC tag is already a Latch device. You can rename it from the Latch devices list.", fontFamily = SatoshiFamily) },
             confirmButton = {
                 TextButton(onClick = { duplicateTarget = null }) {
                     Text("Got it", fontFamily = SatoshiFamily, fontWeight = FontWeight.Bold, color = colors.primary)
@@ -414,9 +393,9 @@ fun LatchesScreen(
             text = {
                 Text(
                     text = if (affectedModeNames.isEmpty()) {
-                        "This removes the physical Latch from Latch."
+                        "This removes the Latch device from Latch."
                     } else {
-                        "This Latch is used by ${affectedModeNames.joinToString()}. Deleting it will also remove those Latch/Unlatch assignments from the affected Modes."
+                        "This Latch device is used by ${affectedModeNames.joinToString()}. Deleting it will also remove those Latch/Unlatch assignments from the affected Modes."
                     },
                     fontFamily = SatoshiFamily,
                 )
@@ -429,15 +408,9 @@ fun LatchesScreen(
                             deleteTarget = null
                         }
                     },
-                ) {
-                    Text("Delete", fontFamily = SatoshiFamily, fontWeight = FontWeight.Bold, color = colors.lockedPrimary)
-                }
+                ) { Text("Delete", fontFamily = SatoshiFamily, fontWeight = FontWeight.Bold, color = colors.lockedPrimary) }
             },
-            dismissButton = {
-                TextButton(onClick = { deleteTarget = null }) {
-                    Text("Cancel", fontFamily = SatoshiFamily)
-                }
-            },
+            dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text("Cancel", fontFamily = SatoshiFamily) } },
         )
     }
 }
