@@ -124,14 +124,22 @@ class LatchRepository(
             )
         )
 
-    suspend fun updateMode(mode: Mode) {
+    /**
+     * Active Modes are immutable. Editing allowed apps or the safety release while latched
+     * would create an in-app escape route around the physical Latch-device requirement.
+     */
+    suspend fun updateMode(mode: Mode): Boolean {
+        if (activeModeState.value.activeModeId == mode.id) return false
         modeDao.update(mode.copy(allowedPackages = mode.allowedPackages.distinct()))
+        return true
     }
 
-    suspend fun deleteMode(mode: Mode) {
-        if (activeModeState.value.activeModeId == mode.id) unlatch()
+    /** An active Mode must be properly unlatched before it can be deleted. */
+    suspend fun deleteMode(mode: Mode): Boolean {
+        if (activeModeState.value.activeModeId == mode.id) return false
         modeDao.delete(mode)
         onAutoLatchSchedulesChanged()
+        return true
     }
 
     suspend fun getLatchDevice(uid: String): LatchDevice? = latchDeviceDao.getByUid(uid)
@@ -144,28 +152,43 @@ class LatchRepository(
         latchDeviceDao.rename(uid, name)
     }
 
-    suspend fun removeLatchDevice(uid: String) {
+    /**
+     * Do not remove a Latch device that belongs to the active Mode. Doing so could remove
+     * the user's intended physical release route and leave only the safety release.
+     */
+    suspend fun removeLatchDevice(uid: String): Boolean {
+        val activeModeId = activeModeState.value.activeModeId
+        if (activeModeId != null && modeLatchDao.getByLatch(uid).any { it.modeId == activeModeId }) {
+            return false
+        }
         latchDeviceDao.delete(uid)
+        return true
     }
 
     suspend fun getLatchActionsForMode(modeId: Long): List<ModeLatchLink> = modeLatchDao.getByMode(modeId)
     suspend fun getActionsForLatch(uid: String): List<ModeLatchLink> = modeLatchDao.getByLatch(uid)
 
-    suspend fun setLatchAction(modeId: Long, latchUid: String, action: LatchAction) {
+    suspend fun setLatchAction(modeId: Long, latchUid: String, action: LatchAction): Boolean {
+        if (activeModeState.value.activeModeId == modeId) return false
         modeLatchDao.insert(ModeLatchLink(modeId = modeId, latchUid = latchUid, action = action.value))
+        return true
     }
 
-    suspend fun removeLatchAction(modeId: Long, latchUid: String, action: LatchAction) {
+    suspend fun removeLatchAction(modeId: Long, latchUid: String, action: LatchAction): Boolean {
+        if (activeModeState.value.activeModeId == modeId) return false
         modeLatchDao.delete(modeId, latchUid, action.value)
+        return true
     }
 
-    suspend fun replaceLatchActions(modeId: Long, links: List<Pair<String, LatchAction>>) {
+    suspend fun replaceLatchActions(modeId: Long, links: List<Pair<String, LatchAction>>): Boolean {
+        if (activeModeState.value.activeModeId == modeId) return false
         database.withTransaction {
             modeLatchDao.deleteByMode(modeId)
             links.distinct().forEach { (uid, action) ->
                 modeLatchDao.insert(ModeLatchLink(modeId = modeId, latchUid = uid, action = action.value))
             }
         }
+        return true
     }
 
     suspend fun getAutoLatchSchedules(modeId: Long): List<AutoLatchSchedule> =
@@ -177,7 +200,8 @@ class LatchRepository(
         enabled: Boolean,
         daysOfWeek: Int,
         startMinuteOfDay: Int,
-    ) {
+    ): Boolean {
+        if (activeModeState.value.activeModeId == modeId) return false
         require(startMinuteOfDay in 0..1439)
         database.withTransaction {
             autoLatchScheduleDao.deleteByMode(modeId)
@@ -191,6 +215,7 @@ class LatchRepository(
             )
         }
         onAutoLatchSchedulesChanged()
+        return true
     }
 
     suspend fun addAutoLatchSchedule(
@@ -199,6 +224,7 @@ class LatchRepository(
         startMinuteOfDay: Int,
         enabled: Boolean = true,
     ): Long {
+        if (activeModeState.value.activeModeId == modeId) return -1L
         val id = autoLatchScheduleDao.insert(
             AutoLatchSchedule(
                 modeId = modeId,
@@ -211,9 +237,11 @@ class LatchRepository(
         return id
     }
 
-    suspend fun updateAutoLatchSchedule(schedule: AutoLatchSchedule) {
+    suspend fun updateAutoLatchSchedule(schedule: AutoLatchSchedule): Boolean {
+        if (activeModeState.value.activeModeId == schedule.modeId) return false
         autoLatchScheduleDao.update(schedule)
         onAutoLatchSchedulesChanged()
+        return true
     }
 
     suspend fun setAutoLatchEnabled(id: Long, enabled: Boolean) {
