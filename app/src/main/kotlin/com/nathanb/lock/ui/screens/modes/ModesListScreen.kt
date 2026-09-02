@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material3.Card
@@ -56,6 +57,7 @@ fun ModesListScreen(
     val app = LocalContext.current.applicationContext as LockApplication
     val modes by app.latchRepository.modes.collectAsState(initial = emptyList())
     val schedules by app.latchRepository.autoLatchSchedules.collectAsState(initial = emptyList())
+    val activeModeState by app.latchRepository.activeModeState.collectAsState()
 
     Scaffold(
         containerColor = colors.surface,
@@ -86,10 +88,12 @@ fun ModesListScreen(
         ) {
             Spacer(Modifier.height(4.dp))
             modes.forEach { mode ->
+                val isActive = activeModeState.activeModeId == mode.id
                 ModeListItem(
                     mode = mode,
                     schedule = schedules.firstOrNull { it.modeId == mode.id },
-                    onClick = { onEditMode(mode.id) },
+                    isActive = isActive,
+                    onClick = { if (!isActive) onEditMode(mode.id) },
                 )
             }
             if (modes.isEmpty()) {
@@ -123,13 +127,20 @@ fun ModesListScreen(
 }
 
 @Composable
-private fun ModeListItem(mode: Mode, schedule: AutoLatchSchedule?, onClick: () -> Unit) {
+private fun ModeListItem(
+    mode: Mode,
+    schedule: AutoLatchSchedule?,
+    isActive: Boolean,
+    onClick: () -> Unit,
+) {
     val colors = LockTheme.colors
     val autoLatchOn = schedule?.enabled == true
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = colors.cardContainer),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isActive) colors.primary.copy(alpha = 0.08f) else colors.cardContainer,
+        ),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         onClick = onClick,
     ) {
@@ -142,16 +153,31 @@ private fun ModeListItem(mode: Mode, schedule: AutoLatchSchedule?, onClick: () -
                 modifier = Modifier.size(44.dp).clip(CircleShape).background(colors.primary.copy(alpha = 0.12f)),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Outlined.Shield, contentDescription = null, tint = colors.primaryDark, modifier = Modifier.size(22.dp))
+                Icon(
+                    imageVector = if (isActive) Icons.Outlined.Lock else Icons.Outlined.Shield,
+                    contentDescription = null,
+                    tint = colors.primaryDark,
+                    modifier = Modifier.size(22.dp),
+                )
             }
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(mode.name, fontFamily = SatoshiFamily, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = colors.onSurface)
-                Text(
-                    "${mode.allowedPackages.size} apps get through · safety release ${formatDuration(mode.maxLatchDurationMs)}",
-                    fontFamily = SatoshiFamily,
-                    fontSize = 13.sp,
-                    color = colors.onSurfaceVariant,
-                )
+                if (isActive) {
+                    Text(
+                        "ACTIVE · Unlatch before editing or deleting",
+                        fontFamily = SatoshiFamily,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 12.sp,
+                        color = colors.primaryDark,
+                    )
+                } else {
+                    Text(
+                        "${mode.allowedPackages.size} apps get through · safety release ${formatDuration(mode.maxLatchDurationMs)}",
+                        fontFamily = SatoshiFamily,
+                        fontSize = 13.sp,
+                        color = colors.onSurfaceVariant,
+                    )
+                }
                 if (autoLatchOn) {
                     Text(autoLatchSummary(schedule), fontFamily = SatoshiFamily, fontSize = 12.sp, color = colors.primaryDark)
                 }
@@ -164,12 +190,14 @@ private fun ModeListItem(mode: Mode, schedule: AutoLatchSchedule?, onClick: () -
                     modifier = Modifier.size(21.dp),
                 )
             }
-            Icon(
-                imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-                contentDescription = null,
-                tint = colors.onSurfaceVariant.copy(alpha = 0.5f),
-                modifier = Modifier.size(20.dp),
-            )
+            if (!isActive) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = colors.onSurfaceVariant.copy(alpha = 0.5f),
+                    modifier = Modifier.size(20.dp),
+                )
+            }
         }
     }
 }
