@@ -90,10 +90,14 @@ data class Mode(
     val createdAt: Long = System.currentTimeMillis(),
 )
 
-/** Persisted latch state. A null Mode id means the phone is unlatched. */
+/**
+ * Persisted latch state. [safetyReleaseAt] is snapshotted when the Mode starts so later Mode
+ * edits cannot move the failsafe deadline for an already-active latch.
+ */
 data class ActiveModeState(
     val activeModeId: Long? = null,
     val latchedAt: Long? = null,
+    val safetyReleaseAt: Long? = null,
 ) {
     val isLatched: Boolean get() = activeModeId != null
 }
@@ -147,11 +151,8 @@ data class ModeLatchLink(
 )
 
 /**
- * Optional one-way scheduled activation for a Mode.
- *
- * Auto-latch can activate a Mode at [startMinuteOfDay] on the selected days, but it has no end
- * time by design. Release still requires an authorised physical Latch or the Mode's maximum
- * latch time to expire.
+ * A one-way recurring activation for a Latch Mode. Days use bit 0 = Monday through bit 6 = Sunday.
+ * Auto-latch can start a Mode but never ends one.
  */
 @Entity(
     tableName = "auto_latch_schedules",
@@ -173,41 +174,3 @@ data class AutoLatchSchedule(
     @ColumnInfo(defaultValue = "1") val enabled: Boolean = true,
     val createdAt: Long = System.currentTimeMillis(),
 )
-
-data class LockState(
-    val isLocked: Boolean = false,
-    val sessionStartTime: Long? = null,
-    val activeProfileId: Long? = null,
-    val timeoutDurationMs: Long = 5 * 60 * 60 * 1000L,
-    val emergencyUnlocksRemaining: Int = 2,
-    val isManualMode: Boolean = false,
-    val lockDurationMs: Long? = null,
-    val isNoEscape: Boolean = false,
-    val isScheduleOrigin: Boolean = false,
-)
-
-data class SetupStatus(
-    val permissionsOk: Boolean,
-    val hasApps: Boolean,
-    val hasNfcTag: Boolean,
-) {
-    val isComplete: Boolean get() = permissionsOk && hasApps && hasNfcTag
-    /** Visible steps only — permissions hidden when granted */
-    val visibleSteps: List<Boolean> get() =
-        if (permissionsOk) listOf(hasApps, hasNfcTag)
-        else listOf(hasApps, hasNfcTag, permissionsOk)
-    val completedCount: Int get() = visibleSteps.count { it }
-    val totalCount: Int get() = visibleSteps.size
-}
-
-enum class EndReason(val value: String) {
-    NFC("nfc"),
-    MANUAL("manual"),
-    EMERGENCY("emergency"),
-    TIMEOUT("timeout"),
-    DURATION("duration"),
-    CANCELLED("cancelled"),
-    UNINSTALL("uninstall"),
-    /** A scheduled window reached its end time. */
-    SCHEDULE("schedule"),
-}
