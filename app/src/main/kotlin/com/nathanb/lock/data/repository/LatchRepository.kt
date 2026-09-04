@@ -61,7 +61,6 @@ class LatchRepository(
     val modeLatchLinks: Flow<List<ModeLatchLink>> = modeLatchDao.getAll()
     val autoLatchSchedules: Flow<List<AutoLatchSchedule>> = autoLatchScheduleDao.getAll()
 
-    /** Modes whose Auto-latch was suspended because their safety release fired. */
     val safetyPausedModeIds: StateFlow<Set<Long>> = dataStore.data
         .map { preferences ->
             preferences[Keys.SAFETY_PAUSED_MODE_IDS].orEmpty().mapNotNull { it.toLongOrNull() }.toSet()
@@ -69,7 +68,6 @@ class LatchRepository(
         .distinctUntilChanged()
         .stateIn(scope, SharingStarted.Eagerly, emptySet())
 
-    /** Installed by LockApplication so schedule edits immediately re-arm the platform alarm. */
     var onAutoLatchSchedulesChanged: suspend () -> Unit = {}
 
     val activeModeState: StateFlow<ActiveModeState> = dataStore.data
@@ -96,14 +94,12 @@ class LatchRepository(
                     val deadline = state.safetyReleaseAt ?: mode?.let { latchedAt + it.maxLatchDurationMs }
                         ?: return@collectLatest
 
-                    // Upgrade an already-active pre-dev.21 latch to the fixed-deadline model once.
                     if (state.safetyReleaseAt == null) {
                         dataStore.edit { it[Keys.SAFETY_RELEASE_AT] = deadline }
                         return@collectLatest
                     }
 
-                    val remaining = (deadline - now()).coerceAtLeast(0L)
-                    delay(remaining)
+                    delay((deadline - now()).coerceAtLeast(0L))
                     val current = activeModeState.value
                     if (current.activeModeId == modeId && current.safetyReleaseAt == deadline) {
                         safetyRelease(modeId)
@@ -125,15 +121,10 @@ class LatchRepository(
         return true
     }
 
-    /** Normal authorised release. This does not affect the Mode's future Auto-latch schedule. */
     suspend fun unlatch() {
         clearActiveMode()
     }
 
-    /**
-     * Exceptional failsafe release. Auto-latch is disabled for this Mode until the user explicitly
-     * turns it back on, guaranteeing a real recovery window if a Latch device is lost or broken.
-     */
     private suspend fun safetyRelease(modeId: Long) {
         autoLatchScheduleDao.getByMode(modeId).forEach { schedule ->
             if (schedule.enabled) autoLatchScheduleDao.setEnabled(schedule.id, false)
@@ -175,14 +166,12 @@ class LatchRepository(
             )
         )
 
-    /** Active Modes are immutable until they are properly released. */
     suspend fun updateMode(mode: Mode): Boolean {
         if (activeModeState.value.activeModeId == mode.id) return false
         modeDao.update(mode.copy(allowedPackages = mode.allowedPackages.distinct()))
         return true
     }
 
-    /** An active Mode must be properly unlatched before it can be deleted. */
     suspend fun deleteMode(mode: Mode): Boolean {
         if (activeModeState.value.activeModeId == mode.id) return false
         modeDao.delete(mode)
@@ -203,9 +192,7 @@ class LatchRepository(
 
     suspend fun removeLatchDevice(uid: String): Boolean {
         val activeModeId = activeModeState.value.activeModeId
-        if (activeModeId != null && modeLatchDao.getByLatch(uid).any { it.modeId == activeModeId }) {
-            return false
-        }
+        if (activeModeId != null && modeLatchDao.getByLatch(uid).any { it.modeId == activeModeId }) return false
         latchDeviceDao.delete(uid)
         return true
     }
@@ -239,7 +226,6 @@ class LatchRepository(
     suspend fun getAutoLatchSchedules(modeId: Long): List<AutoLatchSchedule> =
         autoLatchScheduleDao.getByMode(modeId)
 
-    /** v1 keeps one simple recurring Auto-latch configuration per Mode. */
     suspend fun setAutoLatchSchedule(
         modeId: Long,
         enabled: Boolean,
@@ -293,28 +279,23 @@ class LatchRepository(
     }
 
     suspend fun setAutoLatchEnabled(id: Long, enabled: Boolean) {
-        val schedule = autoLatchSchedulesSnapshot(id)
+        val schedule = autoLatchScheduleDao.getById(id)
         autoLatchScheduleDao.setEnabled(id, enabled)
         if (enabled && schedule != null) clearSafetyPause(schedule.modeId)
         onAutoLatchSchedulesChanged()
     }
 
     suspend fun removeAutoLatchSchedule(id: Long) {
-        val schedule = autoLatchSchedulesSnapshot(id)
+        val schedule = autoLatchScheduleDao.getById(id)
         autoLatchScheduleDao.delete(id)
         if (schedule != null) clearSafetyPause(schedule.modeId)
         onAutoLatchSchedulesChanged()
     }
 
-    private suspend fun autoLatchSchedulesSnapshot(id: Long): AutoLatchSchedule? =
-        autoLatchScheduleDao.getAllSnapshot().firstOrNull { it.id == id }
-
     private suspend fun clearSafetyPause(modeId: Long) {
         dataStore.edit { preferences ->
             val paused = preferences[Keys.SAFETY_PAUSED_MODE_IDS].orEmpty().toMutableSet()
-            if (paused.remove(modeId.toString())) {
-                preferences[Keys.SAFETY_PAUSED_MODE_IDS] = paused
-            }
+            if (paused.remove(modeId.toString())) preferences[Keys.SAFETY_PAUSED_MODE_IDS] = paused
         }
     }
 }
