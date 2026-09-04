@@ -25,6 +25,7 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Shield
+import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -58,6 +59,7 @@ fun ModesListScreen(
     val modes by app.latchRepository.modes.collectAsState(initial = emptyList())
     val schedules by app.latchRepository.autoLatchSchedules.collectAsState(initial = emptyList())
     val activeModeState by app.latchRepository.activeModeState.collectAsState()
+    val safetyPausedModeIds by app.latchRepository.safetyPausedModeIds.collectAsState()
 
     Scaffold(
         containerColor = colors.surface,
@@ -93,6 +95,7 @@ fun ModesListScreen(
                     mode = mode,
                     schedule = schedules.firstOrNull { it.modeId == mode.id },
                     isActive = isActive,
+                    isSafetyPaused = mode.id in safetyPausedModeIds,
                     onClick = { if (!isActive) onEditMode(mode.id) },
                 )
             }
@@ -131,6 +134,7 @@ private fun ModeListItem(
     mode: Mode,
     schedule: AutoLatchSchedule?,
     isActive: Boolean,
+    isSafetyPaused: Boolean,
     onClick: () -> Unit,
 ) {
     val colors = LockTheme.colors
@@ -154,24 +158,34 @@ private fun ModeListItem(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = if (isActive) Icons.Outlined.Lock else Icons.Outlined.Shield,
+                    imageVector = when {
+                        isActive -> Icons.Outlined.Lock
+                        isSafetyPaused -> Icons.Outlined.WarningAmber
+                        else -> Icons.Outlined.Shield
+                    },
                     contentDescription = null,
-                    tint = colors.primaryDark,
+                    tint = if (isSafetyPaused) colors.error else colors.primaryDark,
                     modifier = Modifier.size(22.dp),
                 )
             }
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(mode.name, fontFamily = SatoshiFamily, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = colors.onSurface)
-                if (isActive) {
-                    Text(
+                when {
+                    isActive -> Text(
                         "ACTIVE · Unlatch before editing or deleting",
                         fontFamily = SatoshiFamily,
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 12.sp,
                         color = colors.primaryDark,
                     )
-                } else {
-                    Text(
+                    isSafetyPaused -> Text(
+                        "AUTO-LATCH PAUSED · Safety release was reached",
+                        fontFamily = SatoshiFamily,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 12.sp,
+                        color = colors.error,
+                    )
+                    else -> Text(
                         "${mode.allowedPackages.size} apps get through · safety release ${formatDuration(mode.maxLatchDurationMs)}",
                         fontFamily = SatoshiFamily,
                         fontSize = 13.sp,
@@ -180,6 +194,8 @@ private fun ModeListItem(
                 }
                 if (autoLatchOn) {
                     Text(autoLatchSummary(schedule), fontFamily = SatoshiFamily, fontSize = 12.sp, color = colors.primaryDark)
+                } else if (isSafetyPaused) {
+                    Text("Open this Mode and turn Auto-latch back on when you're ready.", fontFamily = SatoshiFamily, fontSize = 12.sp, color = colors.onSurfaceVariant)
                 }
             }
             if (autoLatchOn) {
