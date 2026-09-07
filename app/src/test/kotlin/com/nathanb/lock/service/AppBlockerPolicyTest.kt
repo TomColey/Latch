@@ -38,4 +38,40 @@ class AppBlockerPolicyTest {
             )
         )
     }
+
+    @Test
+    fun `standard package installer is an escape surface`() {
+        assertTrue(isLatchEscapeSurface("com.android.packageinstaller", null))
+        assertTrue(isLatchEscapeSurface("com.google.android.packageinstaller", "android.app.Dialog"))
+    }
+
+    @Test
+    fun `permission controller uninstall activity is an escape surface`() {
+        assertTrue(
+            isLatchEscapeSurface(
+                "com.google.android.permissioncontroller",
+                "com.android.packageinstaller.UninstallerActivity",
+            )
+        )
+    }
+
+    @Test
+    fun `launcher uninstall handoff is caught by class name`() {
+        assertTrue(
+            isLatchEscapeSurface(
+                "app.olauncher",
+                "app.olauncher.ui.UninstallDialog",
+            )
+        )
+    }
+
+    @Test
+    fun `ordinary permission controller window is not treated as uninstall`() {
+        assertFalse(
+            isLatchEscapeSurface(
+                "com.google.android.permissioncontroller",
+                "com.android.permissioncontroller.permission.ui.GrantPermissionsActivity",
+            )
+        )
+    }
 }
