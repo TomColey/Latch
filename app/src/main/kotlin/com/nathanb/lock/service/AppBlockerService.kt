@@ -17,6 +17,24 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+private val PACKAGE_MANAGEMENT_PACKAGES = setOf(
+    "com.android.packageinstaller",
+    "com.google.android.packageinstaller",
+    "com.samsung.android.packageinstaller",
+    "com.miui.packageinstaller",
+)
+
+private val PERMISSION_CONTROLLER_PACKAGES = setOf(
+    "com.android.permissioncontroller",
+    "com.google.android.permissioncontroller",
+)
+
+private val ESCAPE_CLASS_MARKERS = listOf(
+    "uninstall",
+    "deletepackage",
+    "packageinstaller",
+)
+
 class AppBlockerService : AccessibilityService() {
 
     companion object {
@@ -85,11 +103,21 @@ class AppBlockerService : AccessibilityService() {
         }
 
         val packageName = event.packageName?.toString() ?: return
+        val className = event.className?.toString()
 
         if (homeTracker.onWindowEvent(packageName)) {
             if (BuildConfig.DEBUG) Log.d(TAG, "Home confirmed by launcher event")
             homeRetryJob?.cancel()
             homeRetryJob = null
+        }
+
+        // Uninstall/package-management confirmation can be presented as a dialog rather than
+        // a normal Activity. It must be intercepted before the launcher/protected-package and
+        // isActivity checks, otherwise a custom launcher can expose an easy uninstall bypass.
+        if (activeModeAllowedPackages != null && isLatchEscapeSurface(packageName, className)) {
+            if (BuildConfig.DEBUG) Log.w(TAG, "Blocking Latch escape surface: $packageName/$className")
+            blockCurrentSurface(packageName)
+            return
         }
 
         if (packageName in protectedPackages) return
@@ -103,11 +131,15 @@ class AppBlockerService : AccessibilityService() {
                 return
             }
             if (BuildConfig.DEBUG) Log.d(TAG, "Blocking: $packageName/${event.className}")
-            // HOME first (the real block), then overlay (visual feedback)
-            pressHome()
-            overlayManager.show(packageName, isNoEscapeSession)
-            scheduleHomeRetry()
+            blockCurrentSurface(packageName)
         }
+    }
+
+    private fun blockCurrentSurface(packageName: String) {
+        // HOME first (the real block), then overlay (visual feedback).
+        pressHome()
+        overlayManager.show(packageName, isNoEscapeSession)
+        scheduleHomeRetry()
     }
 
     /**
@@ -196,6 +228,23 @@ class AppBlockerService : AccessibilityService() {
         isEmergencyPaused = paused
         if (BuildConfig.DEBUG) Log.d(TAG, "Emergency pause: $paused")
     }
+}
+
+/**
+ * Surfaces which can dismantle Latch while a Mode is active. Package-installer processes are
+ * dedicated to package management, so any of their windows are treated as restricted. Modern
+ * Android may host uninstall UI inside PermissionController, which is only restricted when the
+ * class name identifies package install/removal. Class markers also catch OEM/custom-launcher
+ * hand-offs whose package itself is otherwise protected as the active launcher.
+ */
+internal fun isLatchEscapeSurface(packageName: String, className: String?): Boolean {
+    if (packageName in PACKAGE_MANAGEMENT_PACKAGES) return true
+
+    val normalizedClass = className?.lowercase().orEmpty()
+    if (ESCAPE_CLASS_MARKERS.any { it in normalizedClass }) return true
+
+    return packageName in PERMISSION_CONTROLLER_PACKAGES &&
+        ("package" in normalizedClass && ("delete" in normalizedClass || "remove" in normalizedClass))
 }
 
 internal fun shouldBlockPackage(
